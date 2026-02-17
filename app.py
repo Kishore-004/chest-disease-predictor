@@ -32,8 +32,8 @@ st.success("✅ Model loaded successfully!")
 # HOSPITAL FETCH FUNCTION (FREE - OpenStreetMap)
 # -----------------------------
 def get_hospitals(city):
-    
-    overpass_url = "http://overpass-api.de/api/interpreter"
+
+    overpass_url = "https://overpass-api.de/api/interpreter"  # changed to HTTPS
     
     query = f"""
     [out:json];
@@ -45,17 +45,24 @@ def get_hospitals(city):
     );
     out center 5;
     """
-    
-    response = requests.get(overpass_url, params={'data': query})
-    data = response.json()
-    
-    hospitals = []
-    
-    for element in data.get('elements', [])[:5]:
-        name = element['tags'].get('name', 'N/A')
-        hospitals.append(name)
-    
-    return hospitals
+
+    try:
+        response = requests.get(overpass_url, params={'data': query}, timeout=10)
+        response.raise_for_status()
+
+        data = response.json()
+
+        hospitals = []
+
+        for element in data.get('elements', [])[:5]:
+            name = element.get('tags', {}).get('name', 'N/A')
+            hospitals.append(name)
+
+        return hospitals
+
+    except Exception:
+        return []
+
 
 # STREAMLIT UI
 # -----------------------------
