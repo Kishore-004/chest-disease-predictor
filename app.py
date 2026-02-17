@@ -70,10 +70,8 @@ def get_hospitals(city):
         query = f"""
         [out:json][timeout:25];
         (
-          node["amenity"="hospital"](around:20000,{lat},{lon});
-          node["amenity"="clinic"](around:20000,{lat},{lon});
-          node["healthcare"="hospital"](around:20000,{lat},{lon});
-          node["healthcare"="clinic"](around:20000,{lat},{lon});
+          node["amenity"="hospital"]["name"](around:20000,{lat},{lon});
+          way["amenity"="hospital"]["name"](around:20000,{lat},{lon});
         );
         out body;
         """
