@@ -6,15 +6,13 @@ import gdown
 import os
 import requests
 
-
 # -----------------------------
 # CONFIG
 # -----------------------------
 MODEL_PATH = "final_chest_disease_model.keras"
-FILE_ID = "1GRO5EwB9PDX61G1lZfIHChvCK7JkYe6v"  # your Drive file ID
+FILE_ID = "1GRO5EwB9PDX61G1lZfIHChvCK7JkYe6v"
 CLASS_NAMES = ['COVID19', 'NORMAL', 'PNEUMONIA', 'TURBERCULOSIS']
 
-# -----------------------------
 # -----------------------------
 # DISEASE → SPECIALIST MAPPING
 # -----------------------------
@@ -25,7 +23,69 @@ DISEASE_SPECIALIST = {
     "TURBERCULOSIS": "Chest Specialist"
 }
 
-# DOWNLOAD MODEL IF NOT PRESENT
+# -----------------------------
+# FALLBACK HOSPITAL DATA
+# -----------------------------
+FALLBACK_HOSPITALS = {
+    "Chennai": [
+        "Apollo Hospitals",
+        "MIOT International",
+        "Fortis Malar Hospital",
+        "Global Health City",
+        "Government General Hospital"
+    ],
+    "Madurai": [
+        "Meenakshi Mission Hospital",
+        "Apollo Specialty Hospital",
+        "Vadamalayan Hospital",
+        "Government Rajaji Hospital"
+    ],
+    "Tirunelveli": [
+        "Shifa Hospital",
+        "Galaxy Hospital",
+        "Annai Velankanni Hospital",
+        "Government Medical College Hospital Tirunelveli"
+    ],
+    "Villupuram": [
+        "Government Medical College Hospital Villupuram",
+        "ES Hospital Villupuram",
+        "Sri Sanjeevi Hospital",
+        "Arun Hospital"
+    ],
+    "Trichy": [
+        "Kauvery Hospital Trichy",
+        "Apollo Speciality Hospital Trichy",
+        "GVN Hospital",
+        "Government Medical College Hospital Trichy"
+    ],
+    "Virudhunagar": [
+        "Sakthi Hospital",
+        "Meenakshi Hospital Virudhunagar",
+        "SS Hospital",
+        "Government Hospital Virudhunagar"
+    ],
+    "Tiruvannamalai": [
+        "Government Medical College Hospital Tiruvannamalai",
+        "Arunai Medical College Hospital",
+        "Vignesh Hospital",
+        "Ramana Maharishi Rangammal Hospital"
+    ],
+    "Tiruvallur": [
+        "Government Hospital Tiruvallur",
+        "CSI Hospital Tiruvallur",
+        "Lakshmi Hospital",
+        "Sugam Hospital"
+    ],
+    "Tenkasi": [
+        "Government Hospital Tenkasi",
+        "Renga Hospital",
+        "Vijaya Hospital Tenkasi",
+        "Srinivasa Hospital"
+    ]
+}
+
+# -----------------------------
+# DOWNLOAD MODEL
 # -----------------------------
 if not os.path.exists(MODEL_PATH):
     st.info("📥 Downloading model from Google Drive (first time only)...")
@@ -38,22 +98,13 @@ model = tf.keras.models.load_model(MODEL_PATH, compile=False)
 st.success("✅ Model loaded successfully!")
 
 # -----------------------------
-# -----------------------------
-# HOSPITAL FETCH FUNCTION (FREE - OpenStreetMap)
+# HOSPITAL FETCH FUNCTION
 # -----------------------------
 def get_hospitals(city):
-
     try:
-        # Step 1: Get coordinates of city using Nominatim
         geo_url = "https://nominatim.openstreetmap.org/search"
-        geo_params = {
-            "q": city,
-            "format": "json"
-        }
-
-        headers = {
-            "User-Agent": "AI-Healthcare-App"
-        }
+        geo_params = {"q": city, "format": "json"}
+        headers = {"User-Agent": "AI-Healthcare-App"}
 
         geo_response = requests.get(geo_url, params=geo_params, headers=headers, timeout=10)
         geo_data = geo_response.json()
@@ -64,7 +115,6 @@ def get_hospitals(city):
         lat = geo_data[0]["lat"]
         lon = geo_data[0]["lon"]
 
-        # Step 2: Search hospitals and clinics within 20km radius
         overpass_url = "https://overpass-api.de/api/interpreter"
 
         query = f"""
@@ -80,7 +130,6 @@ def get_hospitals(city):
         data = response.json()
 
         hospitals = []
-
         for element in data.get('elements', [])[:5]:
             name = element.get('tags', {}).get('name')
             if name:
@@ -91,9 +140,7 @@ def get_hospitals(city):
     except Exception:
         return []
 
-
-
-
+# -----------------------------
 # STREAMLIT UI
 # -----------------------------
 st.title("🩺 Chest Disease Prediction App")
@@ -119,17 +166,20 @@ if uploaded_file:
 
     st.markdown(f"### 🎯 Confidence: **{confidence:.2f}%**")
 
-
     # -----------------------------
     # HOSPITAL RECOMMENDATION
     # -----------------------------
     user_city = st.text_input("🏙 Enter your city to find nearby hospitals")
 
     if user_city:
-        hospitals = get_hospitals(user_city)
+        formatted_city = user_city.title()
+        hospitals = get_hospitals(formatted_city)
 
-        st.subheader(f"🏥 {specialist} Hospitals in {user_city}")
+        # Fallback if API fails
+        if not hospitals and formatted_city in FALLBACK_HOSPITALS:
+            hospitals = FALLBACK_HOSPITALS[formatted_city]
 
+        st.subheader(f"🏥 {specialist} Hospitals in {formatted_city}")
 
         if hospitals:
             for hospital in hospitals:
@@ -137,6 +187,10 @@ if uploaded_file:
         else:
             st.write("No hospitals found. Try another city.")
 
+# -----------------------------
+# DISCLAIMER
+# -----------------------------
 st.markdown("---")
 st.markdown("⚠ This system is for educational purposes only. Please consult a certified medical professional for proper diagnosis and treatment.")
+
 
