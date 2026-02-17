@@ -77,10 +77,8 @@ if uploaded_file:
 
     st.markdown(f"### 🧠 Predicted: **{predicted_class}**")
     st.markdown(f"### 🎯 Confidence: **{confidence:.2f}%**")
-        # -----------------------------
-    # HOSPITAL RECOMMENDATION
+
     # -----------------------------
-        # -----------------------------
     # HOSPITAL RECOMMENDATION
     # -----------------------------
     user_city = st.text_input("🏙 Enter your city to find nearby hospitals")
@@ -95,4 +93,3 @@ if uploaded_file:
                 st.write("•", hospital)
         else:
             st.write("No hospitals found. Try another city.")
-
