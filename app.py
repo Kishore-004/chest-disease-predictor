@@ -15,6 +15,16 @@ FILE_ID = "1GRO5EwB9PDX61G1lZfIHChvCK7JkYe6v"  # your Drive file ID
 CLASS_NAMES = ['COVID19', 'NORMAL', 'PNEUMONIA', 'TURBERCULOSIS']
 
 # -----------------------------
+# -----------------------------
+# DISEASE → SPECIALIST MAPPING
+# -----------------------------
+DISEASE_SPECIALIST = {
+    "COVID19": "Pulmonologist",
+    "NORMAL": "General Physician",
+    "PNEUMONIA": "Pulmonologist",
+    "TURBERCULOSIS": "Chest Specialist"
+}
+
 # DOWNLOAD MODEL IF NOT PRESENT
 # -----------------------------
 if not os.path.exists(MODEL_PATH):
@@ -83,7 +93,12 @@ if uploaded_file:
     confidence = np.max(prediction) * 100
 
     st.markdown(f"### 🧠 Predicted: **{predicted_class}**")
+
+    specialist = DISEASE_SPECIALIST.get(predicted_class, "General Physician")
+    st.markdown(f"### 👨‍⚕ Recommended Specialist: **{specialist}**")
+
     st.markdown(f"### 🎯 Confidence: **{confidence:.2f}%**")
+
 
     # -----------------------------
     # HOSPITAL RECOMMENDATION
@@ -93,10 +108,15 @@ if uploaded_file:
     if user_city:
         hospitals = get_hospitals(user_city)
 
-        st.subheader("🏥 Recommended Hospitals")
+        st.subheader(f"🏥 {specialist} Hospitals in {user_city}")
+
 
         if hospitals:
             for hospital in hospitals:
                 st.write("•", hospital)
         else:
             st.write("No hospitals found. Try another city.")
+
+st.markdown("---")
+st.markdown("⚠ This system is for educational purposes only. Please consult a certified medical professional for proper diagnosis and treatment.")
+
