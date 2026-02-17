@@ -80,6 +80,9 @@ if uploaded_file:
         # -----------------------------
     # HOSPITAL RECOMMENDATION
     # -----------------------------
+        # -----------------------------
+    # HOSPITAL RECOMMENDATION
+    # -----------------------------
     user_city = st.text_input("🏙 Enter your city to find nearby hospitals")
 
     if user_city:
