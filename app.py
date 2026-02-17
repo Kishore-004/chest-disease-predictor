@@ -28,6 +28,35 @@ model = tf.keras.models.load_model(MODEL_PATH, compile=False)
 st.success("✅ Model loaded successfully!")
 
 # -----------------------------
+# -----------------------------
+# HOSPITAL FETCH FUNCTION (FREE - OpenStreetMap)
+# -----------------------------
+def get_hospitals(city):
+    
+    overpass_url = "http://overpass-api.de/api/interpreter"
+    
+    query = f"""
+    [out:json];
+    area["name"="{city}"]->.searchArea;
+    (
+      node["amenity"="hospital"](area.searchArea);
+      way["amenity"="hospital"](area.searchArea);
+      relation["amenity"="hospital"](area.searchArea);
+    );
+    out center 5;
+    """
+    
+    response = requests.get(overpass_url, params={'data': query})
+    data = response.json()
+    
+    hospitals = []
+    
+    for element in data.get('elements', [])[:5]:
+        name = element['tags'].get('name', 'N/A')
+        hospitals.append(name)
+    
+    return hospitals
+
 # STREAMLIT UI
 # -----------------------------
 st.title("🩺 Chest Disease Prediction App")
