@@ -50,7 +50,12 @@ def get_hospitals(city):
             "q": city,
             "format": "json"
         }
-        geo_response = requests.get(geo_url, params=geo_params, timeout=10)
+
+        headers = {
+            "User-Agent": "AI-Healthcare-App"
+        }
+
+        geo_response = requests.get(geo_url, params=geo_params, headers=headers, timeout=10)
         geo_data = geo_response.json()
 
         if not geo_data:
@@ -59,32 +64,35 @@ def get_hospitals(city):
         lat = geo_data[0]["lat"]
         lon = geo_data[0]["lon"]
 
-        # Step 2: Search hospitals around those coordinates
+        # Step 2: Search hospitals and clinics within 20km radius
         overpass_url = "https://overpass-api.de/api/interpreter"
 
         query = f"""
-        [out:json];
+        [out:json][timeout:25];
         (
-          node["amenity"="hospital"](around:15000,{lat},{lon});
-          way["amenity"="hospital"](around:15000,{lat},{lon});
-          relation["amenity"="hospital"](around:15000,{lat},{lon});
+          node["amenity"="hospital"](around:20000,{lat},{lon});
+          node["amenity"="clinic"](around:20000,{lat},{lon});
+          node["healthcare"="hospital"](around:20000,{lat},{lon});
+          node["healthcare"="clinic"](around:20000,{lat},{lon});
         );
-        out center 5;
+        out body;
         """
 
-        response = requests.get(overpass_url, params={'data': query}, timeout=10)
+        response = requests.get(overpass_url, params={'data': query}, headers=headers, timeout=20)
         data = response.json()
 
         hospitals = []
 
         for element in data.get('elements', [])[:5]:
-            name = element.get('tags', {}).get('name', 'N/A')
-            hospitals.append(name)
+            name = element.get('tags', {}).get('name')
+            if name:
+                hospitals.append(name)
 
         return hospitals
 
     except Exception:
         return []
+
 
 
 
