@@ -183,7 +183,10 @@ if uploaded_file:
 
         if hospitals:
             for hospital in hospitals:
-                st.write("•", hospital)
+                 map_query = hospital.replace(" ", "+")
+                 map_link = f"https://www.google.com/maps/search/?api=1&query={map_query}+{formatted_city}"
+                 st.markdown(f"• {hospital}  |  [📍 View on Map]({map_link})")
+
         else:
             st.write("No hospitals found. Try another city.")
 
