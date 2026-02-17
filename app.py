@@ -4,6 +4,8 @@ import numpy as np
 from PIL import Image
 import gdown
 import os
+import requests
+
 
 # -----------------------------
 # CONFIG
