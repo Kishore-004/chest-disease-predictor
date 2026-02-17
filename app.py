@@ -6,6 +6,12 @@ import gdown
 import os
 import requests
 
+# PDF Imports
+from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer
+from reportlab.lib.styles import getSampleStyleSheet
+from reportlab.lib.units import inch
+from reportlab.lib.pagesizes import A4
+
 # -----------------------------
 # CONFIG
 # -----------------------------
@@ -14,7 +20,7 @@ FILE_ID = "1GRO5EwB9PDX61G1lZfIHChvCK7JkYe6v"
 CLASS_NAMES = ['COVID19', 'NORMAL', 'PNEUMONIA', 'TURBERCULOSIS']
 
 # -----------------------------
-# DISEASE → SPECIALIST MAPPING
+# DISEASE → SPECIALIST
 # -----------------------------
 DISEASE_SPECIALIST = {
     "COVID19": "Pulmonologist",
@@ -24,71 +30,35 @@ DISEASE_SPECIALIST = {
 }
 
 # -----------------------------
-# FALLBACK HOSPITAL DATA
+# DISEASE EXPLANATION
+# -----------------------------
+DISEASE_INFO = {
+    "COVID19": "COVID-19 is a viral respiratory infection affecting the lungs. Symptoms include fever, cough, and breathing difficulty.",
+    "PNEUMONIA": "Pneumonia is a lung infection causing inflammation in air sacs. Symptoms include chest pain and cough.",
+    "TURBERCULOSIS": "Tuberculosis is a bacterial infection affecting lungs and requires long-term treatment.",
+    "NORMAL": "No major abnormalities detected. Consult doctor if symptoms persist."
+}
+
+# -----------------------------
+# FALLBACK HOSPITALS
 # -----------------------------
 FALLBACK_HOSPITALS = {
-    "Chennai": [
-        "Apollo Hospitals",
-        "MIOT International",
-        "Fortis Malar Hospital",
-        "Global Health City",
-        "Government General Hospital"
-    ],
-    "Madurai": [
-        "Meenakshi Mission Hospital",
-        "Apollo Specialty Hospital",
-        "Vadamalayan Hospital",
-        "Government Rajaji Hospital"
-    ],
-    "Tirunelveli": [
-        "Shifa Hospital",
-        "Galaxy Hospital",
-        "Annai Velankanni Hospital",
-        "Government Medical College Hospital Tirunelveli"
-    ],
-    "Villupuram": [
-        "Government Medical College Hospital Villupuram",
-        "ES Hospital Villupuram",
-        "Sri Sanjeevi Hospital",
-        "Arun Hospital"
-    ],
-    "Trichy": [
-        "Kauvery Hospital Trichy",
-        "Apollo Speciality Hospital Trichy",
-        "GVN Hospital",
-        "Government Medical College Hospital Trichy"
-    ],
-    "Virudhunagar": [
-        "Sakthi Hospital",
-        "Meenakshi Hospital Virudhunagar",
-        "SS Hospital",
-        "Government Hospital Virudhunagar"
-    ],
-    "Tiruvannamalai": [
-        "Government Medical College Hospital Tiruvannamalai",
-        "Arunai Medical College Hospital",
-        "Vignesh Hospital",
-        "Ramana Maharishi Rangammal Hospital"
-    ],
-    "Tiruvallur": [
-        "Government Hospital Tiruvallur",
-        "CSI Hospital Tiruvallur",
-        "Lakshmi Hospital",
-        "Sugam Hospital"
-    ],
-    "Tenkasi": [
-        "Government Hospital Tenkasi",
-        "Renga Hospital",
-        "Vijaya Hospital Tenkasi",
-        "Srinivasa Hospital"
-    ]
+    "Chennai": ["Apollo Hospitals", "MIOT International", "Fortis Malar Hospital"],
+    "Madurai": ["Meenakshi Mission Hospital", "Government Rajaji Hospital"],
+    "Tirunelveli": ["Shifa Hospital", "Government Medical College Hospital Tirunelveli"],
+    "Trichy": ["Kauvery Hospital Trichy", "Government Medical College Hospital Trichy"],
+    "Villupuram": ["Government Medical College Hospital Villupuram"],
+    "Virudhunagar": ["Government Hospital Virudhunagar"],
+    "Tiruvannamalai": ["Government Medical College Hospital Tiruvannamalai"],
+    "Tiruvallur": ["Government Hospital Tiruvallur"],
+    "Tenkasi": ["Government Hospital Tenkasi"]
 }
 
 # -----------------------------
 # DOWNLOAD MODEL
 # -----------------------------
 if not os.path.exists(MODEL_PATH):
-    st.info("📥 Downloading model from Google Drive (first time only)...")
+    st.info("📥 Downloading model...")
     gdown.download(f"https://drive.google.com/uc?id={FILE_ID}", MODEL_PATH, quiet=False)
 
 # -----------------------------
@@ -98,53 +68,39 @@ model = tf.keras.models.load_model(MODEL_PATH, compile=False)
 st.success("✅ Model loaded successfully!")
 
 # -----------------------------
-# HOSPITAL FETCH FUNCTION
+# PDF GENERATION
 # -----------------------------
-def get_hospitals(city):
-    try:
-        geo_url = "https://nominatim.openstreetmap.org/search"
-        geo_params = {"q": city, "format": "json"}
-        headers = {"User-Agent": "AI-Healthcare-App"}
+def generate_report(name, age, disease, confidence, specialist, description):
+    file_path = "/tmp/AI_Medical_Report.pdf"
+    doc = SimpleDocTemplate(file_path, pagesize=A4)
+    elements = []
+    styles = getSampleStyleSheet()
 
-        geo_response = requests.get(geo_url, params=geo_params, headers=headers, timeout=10)
-        geo_data = geo_response.json()
+    elements.append(Paragraph("<b>AI Medical Report</b>", styles["Title"]))
+    elements.append(Spacer(1, 0.3 * inch))
 
-        if not geo_data:
-            return []
+    text = f"""
+    Patient Name: {name}<br/>
+    Age: {age}<br/><br/>
+    Predicted Disease: {disease}<br/>
+    Confidence: {confidence:.2f}%<br/>
+    Recommended Specialist: {specialist}<br/><br/>
+    Explanation:<br/>{description}
+    """
 
-        lat = geo_data[0]["lat"]
-        lon = geo_data[0]["lon"]
+    elements.append(Paragraph(text, styles["Normal"]))
+    doc.build(elements)
 
-        overpass_url = "https://overpass-api.de/api/interpreter"
-
-        query = f"""
-        [out:json][timeout:25];
-        (
-          node["amenity"="hospital"]["name"](around:20000,{lat},{lon});
-          way["amenity"="hospital"]["name"](around:20000,{lat},{lon});
-        );
-        out body;
-        """
-
-        response = requests.get(overpass_url, params={'data': query}, headers=headers, timeout=20)
-        data = response.json()
-
-        hospitals = []
-        for element in data.get('elements', [])[:5]:
-            name = element.get('tags', {}).get('name')
-            if name:
-                hospitals.append(name)
-
-        return hospitals
-
-    except Exception:
-        return []
+    return file_path
 
 # -----------------------------
 # STREAMLIT UI
 # -----------------------------
-st.title("🩺 Chest Disease Prediction App")
-st.write("Upload a chest X-ray image and get the predicted disease type!")
+st.title("🩺 AI Chest Disease Prediction System")
+
+st.subheader("👤 Patient Details")
+patient_name = st.text_input("Patient Name")
+patient_age = st.number_input("Patient Age", min_value=0, max_value=120, step=1)
 
 uploaded_file = st.file_uploader("Upload Chest X-ray Image", type=["jpg", "jpeg", "png"])
 
@@ -159,41 +115,60 @@ if uploaded_file:
     predicted_class = CLASS_NAMES[np.argmax(prediction)]
     confidence = np.max(prediction) * 100
 
+    specialist = DISEASE_SPECIALIST.get(predicted_class)
+    description = DISEASE_INFO.get(predicted_class)
+
     st.markdown(f"### 🧠 Predicted: **{predicted_class}**")
-
-    specialist = DISEASE_SPECIALIST.get(predicted_class, "General Physician")
     st.markdown(f"### 👨‍⚕ Recommended Specialist: **{specialist}**")
-
     st.markdown(f"### 🎯 Confidence: **{confidence:.2f}%**")
 
+    st.markdown("### 📖 Disease Explanation")
+    st.write(description)
+
     # -----------------------------
-    # HOSPITAL RECOMMENDATION
+    # HOSPITAL SECTION
     # -----------------------------
-    user_city = st.text_input("🏙 Enter your city to find nearby hospitals")
+    user_city = st.text_input("🏙 Enter your city")
 
     if user_city:
         formatted_city = user_city.title()
-        hospitals = get_hospitals(formatted_city)
+        hospitals = FALLBACK_HOSPITALS.get(formatted_city, [])
 
-        # Fallback if API fails
-        if not hospitals and formatted_city in FALLBACK_HOSPITALS:
-            hospitals = FALLBACK_HOSPITALS[formatted_city]
-
-        st.subheader(f"🏥 {specialist} Hospitals in {formatted_city}")
+        st.subheader(f"🏥 Hospitals in {formatted_city}")
 
         if hospitals:
             for hospital in hospitals:
-                 map_query = hospital.replace(" ", "+")
-                 map_link = f"https://www.google.com/maps/search/?api=1&query={map_query}+{formatted_city}"
-                 st.markdown(f"• {hospital}  |  [📍 View on Map]({map_link})")
-
+                map_query = hospital.replace(" ", "+")
+                map_link = f"https://www.google.com/maps/search/?api=1&query={map_query}+{formatted_city}"
+                st.markdown(f"• {hospital}  |  [📍 View on Map]({map_link})")
         else:
-            st.write("No hospitals found. Try another city.")
+            st.write("No hospital data available for this city.")
+
+    # -----------------------------
+    # DOWNLOAD REPORT
+    # -----------------------------
+    if patient_name and patient_age:
+        report_file = generate_report(
+            patient_name,
+            patient_age,
+            predicted_class,
+            confidence,
+            specialist,
+            description
+        )
+
+        with open(report_file, "rb") as f:
+            st.download_button(
+                "📄 Download Medical Report",
+                f,
+                file_name="AI_Medical_Report.pdf",
+                mime="application/pdf"
+            )
 
 # -----------------------------
 # DISCLAIMER
 # -----------------------------
 st.markdown("---")
-st.markdown("⚠ This system is for educational purposes only. Please consult a certified medical professional for proper diagnosis and treatment.")
+st.markdown("⚠ This system is for educational purposes only. Please consult a certified medical professional.")
 
 
