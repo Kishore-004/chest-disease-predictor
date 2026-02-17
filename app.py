@@ -43,23 +43,36 @@ st.success("✅ Model loaded successfully!")
 # -----------------------------
 def get_hospitals(city):
 
-    overpass_url = "https://overpass-api.de/api/interpreter"  # changed to HTTPS
-    
-    query = f"""
-    [out:json];
-    area["name"="{city}"]->.searchArea;
-    (
-      node["amenity"="hospital"](area.searchArea);
-      way["amenity"="hospital"](area.searchArea);
-      relation["amenity"="hospital"](area.searchArea);
-    );
-    out center 5;
-    """
-
     try:
-        response = requests.get(overpass_url, params={'data': query}, timeout=10)
-        response.raise_for_status()
+        # Step 1: Get coordinates of city using Nominatim
+        geo_url = "https://nominatim.openstreetmap.org/search"
+        geo_params = {
+            "q": city,
+            "format": "json"
+        }
+        geo_response = requests.get(geo_url, params=geo_params, timeout=10)
+        geo_data = geo_response.json()
 
+        if not geo_data:
+            return []
+
+        lat = geo_data[0]["lat"]
+        lon = geo_data[0]["lon"]
+
+        # Step 2: Search hospitals around those coordinates
+        overpass_url = "https://overpass-api.de/api/interpreter"
+
+        query = f"""
+        [out:json];
+        (
+          node["amenity"="hospital"](around:15000,{lat},{lon});
+          way["amenity"="hospital"](around:15000,{lat},{lon});
+          relation["amenity"="hospital"](around:15000,{lat},{lon});
+        );
+        out center 5;
+        """
+
+        response = requests.get(overpass_url, params={'data': query}, timeout=10)
         data = response.json()
 
         hospitals = []
@@ -72,6 +85,7 @@ def get_hospitals(city):
 
     except Exception:
         return []
+
 
 
 # STREAMLIT UI
