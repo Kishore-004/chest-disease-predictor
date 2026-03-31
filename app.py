@@ -13,92 +13,21 @@ from reportlab.lib.styles import getSampleStyleSheet
 from reportlab.lib.pagesizes import A4
 
 # -----------------------------
-# PAGE CONFIG (MUST BE FIRST AFTER IMPORT)
+# PAGE CONFIG
 # -----------------------------
 st.set_page_config(page_title="AI Healthcare", layout="wide")
 
 # -----------------------------
-# FORCE FONT + PREMIUM UI (WORKING)
+# HEADER (BIG FONT FIXED)
 # -----------------------------
 st.markdown("""
-<style>
-
-/* FORCE FONT EVERYWHERE */
-html, body, [class*="st-"], [class*="css"] {
-    font-family: 'Segoe UI', sans-serif !important;
-    font-size: 20px !important;
-}
-
-/* HEADINGS */
-h1 {
-    font-size: 50px !important;
-    font-weight: 700 !important;
-}
-
-h2 {
-    font-size: 34px !important;
-}
-
-h3 {
-    font-size: 28px !important;
-}
-
-/* TEXT */
-p, span, div, label {
-    font-size: 20px !important;
-}
-
-/* SIDEBAR */
-section[data-testid="stSidebar"] * {
-    font-size: 20px !important;
-    background-color: #d6eaf8;
-}
-
-/* INPUT */
-input, textarea {
-    font-size: 18px !important;
-}
-
-/* BUTTON */
-button {
-    font-size: 18px !important;
-    border-radius: 10px;
-    background: linear-gradient(135deg, #2E86C1, #3498DB);
-    color: white;
-}
-
-/* FILE UPLOADER */
-[data-testid="stFileUploader"] * {
-    font-size: 18px !important;
-}
-
-/* ALERT */
-[data-testid="stAlert"] * {
-    font-size: 18px !important;
-}
-
-/* CARD */
-.card {
-    font-size: 22px !important;
-    padding: 25px;
-    border-radius: 16px;
-    background: white;
-    box-shadow: 0px 6px 18px rgba(0,0,0,0.08);
-    border-left: 6px solid #2E86C1;
-    margin-bottom: 20px;
-}
-
-/* BACKGROUND */
-.stApp {
-    background: linear-gradient(120deg, #f5f9ff, #ffffff);
-}
-
-/* PROGRESS */
-.stProgress > div > div {
-    background: linear-gradient(90deg, #2E86C1, #5DADE2);
-}
-
-</style>
+<h1 style='text-align:center; font-size:48px; color:#2E86C1;'>
+🩺 AI Chest Disease Detection
+</h1>
+<p style='text-align:center; font-size:22px; color:#555;'>
+Smart Healthcare Platform | Explainable AI
+</p>
+<hr>
 """, unsafe_allow_html=True)
 
 # -----------------------------
@@ -129,18 +58,9 @@ FALLBACK_HOSPITALS = {
 }
 
 # -----------------------------
-# HEADER
-# -----------------------------
-st.markdown("""
-<h1 style='text-align:center; color:#2E86C1;'>🩺 AI Chest Disease Detection</h1>
-<p style='text-align:center;'>Smart Healthcare Platform | Explainable AI</p>
-<hr>
-""", unsafe_allow_html=True)
-
-# -----------------------------
 # SIDEBAR
 # -----------------------------
-st.sidebar.header("👤 Patient Details")
+st.sidebar.markdown("<h2>👤 Patient Details</h2>", unsafe_allow_html=True)
 patient_name = st.sidebar.text_input("Name")
 patient_age = st.sidebar.number_input("Age", 0, 120)
 
@@ -155,7 +75,7 @@ model = tf.keras.models.load_model(MODEL_PATH, compile=False)
 st.success("✅ Model Loaded")
 
 # -----------------------------
-# GRAD-CAM
+# GRAD-CAM FUNCTION
 # -----------------------------
 def get_gradcam_heatmap(model, img_array, layer_name):
     grad_model = tf.keras.models.Model(
@@ -210,9 +130,9 @@ def generate_report(name, age, disease, confidence):
     return file
 
 # -----------------------------
-# UPLOAD
+# UPLOAD SECTION (BIG TEXT)
 # -----------------------------
-st.markdown("## 📤 Upload Chest X-ray")
+st.markdown("<h2 style='font-size:32px;'>📤 Upload Chest X-ray</h2>", unsafe_allow_html=True)
 
 col1, col2 = st.columns(2)
 
@@ -238,19 +158,22 @@ if uploaded_file:
     pred = CLASS_NAMES[np.argmax(preds)]
     conf = np.max(preds)*100
 
+    # RESULT CARD
     st.markdown(f"""
-    <div class="card">
-    <h3>🧠 Prediction: {pred}</h3>
-    <p>👨‍⚕ Specialist: {DISEASE_SPECIALIST.get(pred)}</p>
-    <p>🎯 Confidence: {conf:.2f}%</p>
+    <div style="padding:20px;border-radius:12px;background:#f4f6f7;border-left:6px solid #2E86C1;font-size:22px;">
+    <b>🧠 Prediction:</b> {pred} <br>
+    <b>👨‍⚕ Specialist:</b> {DISEASE_SPECIALIST.get(pred)} <br>
+    <b>🎯 Confidence:</b> {conf:.2f}%
     </div>
     """, unsafe_allow_html=True)
 
     st.progress(int(conf))
     st.info(DISEASE_INFO.get(pred))
 
+    # -----------------------------
     # GRAD-CAM
-    st.markdown("## 🧠 AI Explanation (Grad-CAM)")
+    # -----------------------------
+    st.markdown("<h2 style='font-size:32px;'>🧠 AI Explanation (Grad-CAM)</h2>", unsafe_allow_html=True)
 
     try:
         layer_name = "conv5_block16_concat"
@@ -264,15 +187,20 @@ if uploaded_file:
     except Exception as e:
         st.error(f"Grad-CAM Error: {e}")
 
+    # -----------------------------
     # HOSPITALS
-    st.markdown("## 🏥 Recommended Hospitals")
+    # -----------------------------
+    st.markdown("<h2 style='font-size:32px;'>🏥 Recommended Hospitals</h2>", unsafe_allow_html=True)
+
     city = st.text_input("Enter City")
 
     if city:
         for h in FALLBACK_HOSPITALS.get(city.title(), []):
-            st.markdown(f"<div class='card'>🏥 {h}</div>", unsafe_allow_html=True)
+            st.markdown(f"<div style='padding:15px;background:#eef3f7;margin:10px 0;border-radius:10px;font-size:20px;'>🏥 {h}</div>", unsafe_allow_html=True)
 
+    # -----------------------------
     # DOWNLOAD
+    # -----------------------------
     if patient_name and patient_age:
         file = generate_report(patient_name, patient_age, pred, conf)
         with open(file,"rb") as f:
@@ -281,5 +209,4 @@ if uploaded_file:
 # -----------------------------
 # FOOTER
 # -----------------------------
-st.markdown("---")
-st.markdown("<p style='text-align:center;'>AI Healthcare System 🚀</p>", unsafe_allow_html=True)
+st.markdown("<hr><p style='text-align:center;font-size:18px;'>AI Healthcare System 🚀</p>", unsafe_allow_html=True)
