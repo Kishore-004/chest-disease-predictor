@@ -18,65 +18,92 @@ from reportlab.lib.pagesizes import A4
 st.set_page_config(page_title="AI Healthcare", layout="wide")
 
 # -----------------------------
-# PREMIUM UI STYLE
+# ULTRA PREMIUM UI + FONT FIX
 # -----------------------------
 st.markdown("""
 <style>
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
 
+/* FORCE FONT EVERYWHERE */
+* {
+    font-family: 'Inter', sans-serif !important;
+}
+
+/* GLOBAL SIZE */
 html, body, [class*="css"] {
-    font-family: 'Inter', sans-serif;
-    font-size: 18px;
+    font-size: 19px !important;
     color: #1f2d3d;
 }
 
+/* BACKGROUND */
 .stApp {
     background: linear-gradient(120deg, #f5f9ff, #ffffff);
 }
 
+/* SIDEBAR */
 section[data-testid="stSidebar"] {
     background: linear-gradient(180deg, #d6eaf8, #eaf4fc);
     padding: 20px;
 }
 
+/* HEADINGS */
 h1 {
-    font-size: 44px !important;
+    font-size: 48px !important;
     font-weight: 700;
 }
 
 h2 {
-    font-size: 30px !important;
+    font-size: 32px !important;
 }
 
 h3 {
-    font-size: 24px !important;
+    font-size: 26px !important;
 }
 
-p, label {
+/* TEXT */
+label, p, span, div {
+    font-size: 19px !important;
+}
+
+/* INPUT */
+input, textarea {
     font-size: 18px !important;
 }
 
-.stButton>button {
+/* BUTTON */
+.stButton button {
+    font-size: 18px !important;
+    padding: 10px 16px !important;
+    border-radius: 10px;
     background: linear-gradient(135deg, #2E86C1, #3498DB);
     color: white;
-    border-radius: 10px;
-    font-size: 18px;
-    padding: 10px;
 }
 
+/* FILE UPLOADER */
+[data-testid="stFileUploader"] * {
+    font-size: 18px !important;
+}
+
+/* ALERT BOX */
+.stAlert * {
+    font-size: 18px !important;
+}
+
+/* CARD */
 .card {
+    font-size: 20px !important;
     padding: 25px;
     border-radius: 16px;
     background: white;
     box-shadow: 0px 6px 18px rgba(0,0,0,0.08);
     border-left: 6px solid #2E86C1;
     margin-bottom: 20px;
-    font-size: 20px;
 }
 
+/* PROGRESS */
 .stProgress > div > div {
     background: linear-gradient(90deg, #2E86C1, #5DADE2);
 }
+
 </style>
 """, unsafe_allow_html=True)
 
