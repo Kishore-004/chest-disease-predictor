@@ -1,4 +1,5 @@
 import streamlit as st
+from supabase import create_client, Client
 import tensorflow as tf
 import numpy as np
 from PIL import Image
@@ -16,96 +17,93 @@ from reportlab.lib.units import inch
 st.set_page_config(page_title="AI Healthcare", layout="wide")
 
 # -----------------------------
-# BIG FONT CSS (FORCE)
+# SUPABASE CONFIG (IMPORTANT)
 # -----------------------------
-st.markdown("""
-<style>
-html, body, [class*="css"] {
-    font-size: 24px !important;
-    font-weight: bold !important;
-}
+SUPABASE_URL = "https://zpizagggcjbfgbixnchx.supabase.co"
+SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."  # paste full key
 
-section[data-testid="stSidebar"] * {
-    font-size: 22px !important;
-    font-weight: bold !important;
-}
+supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
-input, textarea {
-    font-size: 22px !important;
-    font-weight: bold !important;
-}
+# -----------------------------
+# LOGIN SYSTEM
+# -----------------------------
+if "user" not in st.session_state:
+    st.session_state.user = None
 
-button {
-    font-size: 22px !important;
-    font-weight: bold !important;
-}
+def login_page():
+    st.markdown("<h1 style='text-align:center;'>🔐 Login</h1>", unsafe_allow_html=True)
 
-h1 { font-size: 70px !important; }
-h2 { font-size: 45px !important; }
-h3 { font-size: 35px !important; }
+    tab1, tab2 = st.tabs(["Login", "Sign Up"])
 
-p { font-size: 24px !important; font-weight: bold !important; }
-</style>
-""", unsafe_allow_html=True)
+    # LOGIN
+    with tab1:
+        email = st.text_input("Email")
+        password = st.text_input("Password", type="password")
+
+        if st.button("Login"):
+            try:
+                user = supabase.auth.sign_in_with_password({
+                    "email": email,
+                    "password": password
+                })
+                st.session_state.user = user
+                st.success("Login successful")
+                st.rerun()
+            except Exception as e:
+                st.error("Invalid credentials")
+
+    # SIGNUP
+    with tab2:
+        new_email = st.text_input("New Email")
+        new_password = st.text_input("New Password", type="password")
+
+        if st.button("Sign Up"):
+            try:
+                supabase.auth.sign_up({
+                    "email": new_email,
+                    "password": new_password
+                })
+                st.success("Account created! Please login")
+            except:
+                st.error("Signup failed")
+
+# BLOCK APP IF NOT LOGGED IN
+if st.session_state.user is None:
+    login_page()
+    st.stop()
+
+# -----------------------------
+# LOGOUT
+# -----------------------------
+if st.sidebar.button("🚪 Logout"):
+    st.session_state.user = None
+    st.rerun()
 
 # -----------------------------
 # HEADER
 # -----------------------------
-st.markdown("""
-<h1 style='text-align:center;'>🩺 AI Healthcare System</h1>
-<p style='text-align:center;'>Chest Disease Detection Platform</p>
-<hr>
-""", unsafe_allow_html=True)
+st.markdown("<h1 style='text-align:center;'>🩺 AI Healthcare System</h1>", unsafe_allow_html=True)
 
 # -----------------------------
-# CONFIG
+# MODEL CONFIG
 # -----------------------------
 MODEL_PATH = "final_chest_disease_model.keras"
 FILE_ID = "1GRO5EwB9PDX61G1lZfIHChvCK7JkYe6v"
 CLASS_NAMES = ['COVID19','NORMAL','PNEUMONIA','TURBERCULOSIS']
 
-DISEASE_INFO = {
-    "COVID19": "COVID-19 is a viral infection affecting lungs causing fever, cough and breathing issues.",
-    "PNEUMONIA": "Pneumonia is a lung infection causing inflammation and breathing difficulty.",
-    "TURBERCULOSIS": "Tuberculosis is a bacterial lung infection requiring long treatment.",
-    "NORMAL": "No abnormalities detected."
-}
-
-DISEASE_SPECIALIST = {
-    "COVID19": "Pulmonologist",
-    "PNEUMONIA": "Pulmonologist",
-    "TURBERCULOSIS": "Chest Specialist",
-    "NORMAL": "General Physician"
-}
-
-FALLBACK_HOSPITALS = {
-    "Chennai": ["Apollo Hospitals", "MIOT International", "Fortis Malar"],
-    "Madurai": ["Meenakshi Mission Hospital"],
-    "Trichy": ["Kauvery Hospital"]
-}
-
-# -----------------------------
-# LOAD MODEL
-# -----------------------------
 if not os.path.exists(MODEL_PATH):
     gdown.download(f"https://drive.google.com/uc?id={FILE_ID}", MODEL_PATH)
 
 model = tf.keras.models.load_model(MODEL_PATH, compile=False)
 
 # -----------------------------
-# SIDEBAR
+# USER INPUT
 # -----------------------------
-st.sidebar.header("Patient Details")
-name = st.sidebar.text_input("Name")
-age = st.sidebar.number_input("Age",0,120)
-
-symptoms = st.sidebar.multiselect(
-    "Symptoms",
-    ["Fever","Cough","Chest Pain","Breathing Difficulty","Fatigue"]
-)
+name = st.sidebar.text_input("Patient Name")
+age = st.sidebar.number_input("Age", 0, 120)
 
 # -----------------------------
-# GRAD-CAM
+# GRAD-CAM FUNCTION
 # -----------------------------
 def gradcam(img_array):
     layer = "conv5_block16_concat"
@@ -139,7 +137,7 @@ def gradcam(img_array):
 # -----------------------------
 # PDF FUNCTION
 # -----------------------------
-def generate_pdf(name, age, disease, conf, symptoms, hospitals, specialist, description, grad_path, graph_path):
+def generate_pdf(name, age, disease, conf, grad_path):
     file = f"/tmp/report_{uuid.uuid4().hex}.pdf"
 
     doc = SimpleDocTemplate(file, pagesize=A4)
@@ -152,48 +150,24 @@ def generate_pdf(name, age, disease, conf, symptoms, hospitals, specialist, desc
 
     elements.append(Paragraph(f"Name: {name}", styles["Normal"]))
     elements.append(Paragraph(f"Age: {age}", styles["Normal"]))
-    elements.append(Spacer(1, 10))
-
-    elements.append(Paragraph("Symptoms:", styles["Heading2"]))
-    elements.append(Paragraph(", ".join(symptoms) if symptoms else "None", styles["Normal"]))
-    elements.append(Spacer(1, 10))
-
-    elements.append(Paragraph("Diagnosis:", styles["Heading2"]))
     elements.append(Paragraph(f"Disease: {disease}", styles["Normal"]))
     elements.append(Paragraph(f"Confidence: {conf:.2f}%", styles["Normal"]))
-    elements.append(Paragraph(f"Specialist: {specialist}", styles["Normal"]))
-    elements.append(Spacer(1, 10))
 
-    elements.append(Paragraph("Disease Explanation:", styles["Heading2"]))
-    elements.append(Paragraph(description, styles["Normal"]))
-    elements.append(Spacer(1, 10))
-
-    elements.append(Paragraph("Recommended Hospitals:", styles["Heading2"]))
-    for h in hospitals:
-        elements.append(Paragraph(f"{h} ({specialist})", styles["Normal"]))
-
-    elements.append(Spacer(1, 15))
+    elements.append(Spacer(1, 20))
 
     if os.path.exists(grad_path):
-        elements.append(Paragraph("Grad-CAM Visualization:", styles["Heading2"]))
         elements.append(RLImage(grad_path, width=4*inch, height=4*inch))
-
-    elements.append(Spacer(1, 15))
-
-    if os.path.exists(graph_path):
-        elements.append(Paragraph("Prediction Graph:", styles["Heading2"]))
-        elements.append(RLImage(graph_path, width=4*inch, height=3*inch))
 
     doc.build(elements)
     return file
 
 # -----------------------------
-# UPLOAD
+# UPLOAD IMAGE
 # -----------------------------
-uploaded_file = st.file_uploader("Upload X-ray")
+file = st.file_uploader("Upload Chest X-ray")
 
-if uploaded_file:
-    img = Image.open(uploaded_file).convert("RGB")
+if file:
+    img = Image.open(file).convert("RGB")
 
     img_resized = img.resize((224,224))
     arr = np.expand_dims(np.array(img_resized)/255, axis=0)
@@ -202,21 +176,18 @@ if uploaded_file:
     disease = CLASS_NAMES[np.argmax(preds)]
     conf = np.max(preds)*100
 
-    st.success(f"{disease} ({conf:.2f}%)")
+    st.success(f"Prediction: {disease} ({conf:.2f}%)")
 
     # IMAGE + GRAPH
     col1, col2 = st.columns(2)
 
     with col1:
-        st.image(img)
+        st.image(img, caption="X-ray")
 
     with col2:
         fig, ax = plt.subplots(figsize=(4,3))
         ax.bar(CLASS_NAMES, preds[0])
         st.pyplot(fig)
-
-    graph_path = f"/tmp/graph_{uuid.uuid4().hex}.png"
-    fig.savefig(graph_path)
 
     # GRAD-CAM
     heat = gradcam(arr)
@@ -229,25 +200,14 @@ if uploaded_file:
     grad_img = heat*0.4 + np.array(img_resized)
     grad_img = np.uint8(grad_img)
 
-    st.image(grad_img)
+    st.image(grad_img, caption="Grad-CAM")
 
     grad_path = f"/tmp/grad_{uuid.uuid4().hex}.jpg"
     cv2.imwrite(grad_path, grad_img)
 
-    city = st.text_input("Enter City")
-
+    # PDF DOWNLOAD (FIXED)
     if name:
-        hospitals = FALLBACK_HOSPITALS.get(city.title(), [])
-
-        pdf = generate_pdf(
-            name, age, disease, conf,
-            symptoms,
-            hospitals,
-            DISEASE_SPECIALIST.get(disease),
-            DISEASE_INFO.get(disease),
-            grad_path,
-            graph_path
-        )
+        pdf = generate_pdf(name, age, disease, conf, grad_path)
 
         with open(pdf, "rb") as f:
             pdf_bytes = f.read()
@@ -255,6 +215,6 @@ if uploaded_file:
         st.download_button(
             "📄 Download PDF Report",
             data=pdf_bytes,
-            file_name="AI_Medical_Report.pdf",
+            file_name="AI_Report.pdf",
             mime="application/pdf"
         )
