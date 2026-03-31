@@ -2,65 +2,65 @@ import streamlit as st
 import tensorflow as tf
 import numpy as np
 from PIL import Image
-import os, cv2, uuid
+import gdown, os, cv2, uuid
 import matplotlib.pyplot as plt
 
-# PDF
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Image as RLImage
 from reportlab.lib.styles import getSampleStyleSheet
 from reportlab.lib.pagesizes import A4
 from reportlab.lib.units import inch
 
 # -----------------------------
-# CONFIG
+# PAGE CONFIG
 # -----------------------------
-MODEL_PATH = "model.h5"   # keep your model locally
+st.set_page_config(page_title="AI Healthcare", layout="wide")
 
-CLASS_NAMES = ['COVID19','NORMAL','PNEUMONIA','TUBERCULOSIS']
+st.title("🩺 AI Chest Disease Prediction System")
+
+# -----------------------------
+# MODEL CONFIG
+# -----------------------------
+MODEL_PATH = "final_chest_disease_model.keras"
+FILE_ID = "1GRO5EwB9PDX61G1lZfIHChvCK7JkYe6v"
+CLASS_NAMES = ['COVID19','NORMAL','PNEUMONIA','TURBERCULOSIS']
 
 # -----------------------------
 # LOAD MODEL (SAFE)
 # -----------------------------
-@st.cache_resource
-def load_model():
-    try:
-        return tf.keras.models.load_model(MODEL_PATH, compile=False)
-    except Exception as e:
-        st.error(f"Model loading failed: {e}")
-        return None
+if not os.path.exists(MODEL_PATH):
+    with st.spinner("Downloading model..."):
+        gdown.download(
+            f"https://drive.google.com/uc?id={FILE_ID}",
+            MODEL_PATH,
+            quiet=False
+        )
 
-model = load_model()
-
-# -----------------------------
-# HEADER
-# -----------------------------
-st.title("🩺 AI Healthcare System")
+model = tf.keras.models.load_model(MODEL_PATH, compile=False)
 
 # -----------------------------
 # INPUT
 # -----------------------------
-name = st.text_input("Name")
-age = st.number_input("Age", 0, 120)
+name = st.sidebar.text_input("Patient Name")
+age = st.sidebar.number_input("Age", 0, 120)
 
 # -----------------------------
-# UPLOAD
-# -----------------------------
-uploaded_file = st.file_uploader("Upload X-ray")
-
-# -----------------------------
-# SAFE GRADCAM
+# GRAD-CAM (SAFE)
 # -----------------------------
 def gradcam(img_array):
     try:
-        layer_name = model.layers[-1].name  # fallback layer
+        layer = "conv5_block16_concat"
 
         grad_model = tf.keras.models.Model(
             inputs=model.inputs,
-            outputs=[model.layers[-2].output, model.output]
+            outputs=[model.get_layer(layer).output, model.output]
         )
 
         with tf.GradientTape() as tape:
             conv_outputs, predictions = grad_model(img_array)
+
+            if isinstance(predictions, list):
+                predictions = predictions[0]
+
             class_idx = tf.argmax(predictions[0])
             loss = predictions[:, class_idx]
 
@@ -76,92 +76,103 @@ def gradcam(img_array):
 
         return heatmap
 
-    except Exception as e:
-        st.warning(f"Grad-CAM failed: {e}")
+    except:
         return None
 
 # -----------------------------
-# MAIN LOGIC
+# PDF FUNCTION
 # -----------------------------
-if uploaded_file and model:
+def generate_pdf(name, age, disease, conf, grad_path, graph_path):
+    file = f"/tmp/report_{uuid.uuid4().hex}.pdf"
 
-    img = Image.open(uploaded_file).convert("RGB")
+    doc = SimpleDocTemplate(file, pagesize=A4)
+    styles = getSampleStyleSheet()
+
+    elements = []
+
+    elements.append(Paragraph("AI MEDICAL REPORT", styles["Title"]))
+    elements.append(Spacer(1, 20))
+
+    elements.append(Paragraph(f"Name: {name}", styles["Normal"]))
+    elements.append(Paragraph(f"Age: {age}", styles["Normal"]))
+    elements.append(Paragraph(f"Disease: {disease}", styles["Normal"]))
+    elements.append(Paragraph(f"Confidence: {conf:.2f}%", styles["Normal"]))
+
+    elements.append(Spacer(1, 20))
+
+    if grad_path and os.path.exists(grad_path):
+        elements.append(Paragraph("Grad-CAM", styles["Heading2"]))
+        elements.append(RLImage(grad_path, width=4*inch, height=4*inch))
+
+    elements.append(Spacer(1, 20))
+
+    if graph_path and os.path.exists(graph_path):
+        elements.append(Paragraph("Prediction Graph", styles["Heading2"]))
+        elements.append(RLImage(graph_path, width=4*inch, height=3*inch))
+
+    doc.build(elements)
+    return file
+
+# -----------------------------
+# UPLOAD
+# -----------------------------
+file = st.file_uploader("Upload Chest X-ray")
+
+if file:
+    img = Image.open(file).convert("RGB")
+
     img_resized = img.resize((224,224))
-
     arr = np.expand_dims(np.array(img_resized)/255, axis=0)
 
-    try:
-        preds = model.predict(arr)
-    except Exception as e:
-        st.error(f"Prediction error: {e}")
-        st.stop()
-
+    preds = model.predict(arr)
     disease = CLASS_NAMES[np.argmax(preds)]
-    conf = np.max(preds) * 100
+    conf = np.max(preds)*100
 
     st.success(f"{disease} ({conf:.2f}%)")
 
+    # IMAGE + GRAPH
     col1, col2 = st.columns(2)
 
     with col1:
-        st.image(img)
+        st.image(img, caption="X-ray", use_container_width=True)
 
     with col2:
-        fig, ax = plt.subplots()
+        fig, ax = plt.subplots(figsize=(4,3))
         ax.bar(CLASS_NAMES, preds[0])
         st.pyplot(fig)
 
-    # SAVE GRAPH (cross-platform)
-    graph_path = f"graph_{uuid.uuid4().hex}.png"
+    # SAVE GRAPH
+    graph_path = f"/tmp/graph_{uuid.uuid4().hex}.png"
     fig.savefig(graph_path)
 
-    # -----------------------------
-    # GRAD CAM
-    # -----------------------------
+    # GRAD-CAM
     heat = gradcam(arr)
+    grad_path = None
 
     if heat is not None:
-        heat = cv2.resize(heat, (224,224))
+        heat = heat.numpy() if hasattr(heat,"numpy") else heat
+        heat = cv2.resize(heat,(224,224))
         heat = np.uint8(255*heat)
         heat = cv2.applyColorMap(heat, cv2.COLORMAP_JET)
 
         grad_img = heat*0.4 + np.array(img_resized)
         grad_img = np.uint8(grad_img)
 
-        st.image(grad_img)
+        st.image(grad_img, caption="Grad-CAM")
 
-        grad_path = f"grad_{uuid.uuid4().hex}.jpg"
+        grad_path = f"/tmp/grad_{uuid.uuid4().hex}.jpg"
         cv2.imwrite(grad_path, grad_img)
 
-    # -----------------------------
-    # PDF GENERATION
-    # -----------------------------
+    # PDF DOWNLOAD
     if name:
+        pdf = generate_pdf(name, age, disease, conf, grad_path, graph_path)
 
-        file = f"report_{uuid.uuid4().hex}.pdf"
+        with open(pdf, "rb") as f:
+            pdf_bytes = f.read()
 
-        doc = SimpleDocTemplate(file, pagesize=A4)
-        styles = getSampleStyleSheet()
-
-        elements = []
-        elements.append(Paragraph("AI MEDICAL REPORT", styles["Title"]))
-        elements.append(Spacer(1, 20))
-
-        elements.append(Paragraph(f"Name: {name}", styles["Normal"]))
-        elements.append(Paragraph(f"Age: {age}", styles["Normal"]))
-        elements.append(Spacer(1, 10))
-
-        elements.append(Paragraph(f"Disease: {disease}", styles["Normal"]))
-        elements.append(Paragraph(f"Confidence: {conf:.2f}%", styles["Normal"]))
-
-        if os.path.exists(graph_path):
-            elements.append(RLImage(graph_path, width=4*inch, height=3*inch))
-
-        doc.build(elements)
-
-        with open(file, "rb") as f:
-            st.download_button(
-                "📄 Download Report",
-                f.read(),
-                file_name="report.pdf"
-            )
+        st.download_button(
+            "📄 Download PDF Report",
+            data=pdf_bytes,
+            file_name="AI_Report.pdf",
+            mime="application/pdf"
+        )
