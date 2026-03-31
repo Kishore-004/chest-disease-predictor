@@ -1,9 +1,8 @@
 import streamlit as st
-from supabase import create_client, Client
 import tensorflow as tf
 import numpy as np
 from PIL import Image
-import gdown, os, cv2, uuid
+import os, cv2, uuid
 import matplotlib.pyplot as plt
 
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Image as RLImage
@@ -15,99 +14,26 @@ from reportlab.lib.units import inch
 # PAGE CONFIG
 # -----------------------------
 st.set_page_config(page_title="AI Healthcare", layout="wide")
-st.write("✅ App started successfully")
-
-# -----------------------------
-# SUPABASE CONFIG
-# -----------------------------
-SUPABASE_URL = "https://zpizagggcjbfgbixnchx.supabase.co"
-SUPABASE_KEY = "YOUR_NEW_SAFE_KEY"  # ⚠️ Replace with new key
-
-try:
-    supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
-    st.write("✅ Supabase connected")
-except Exception as e:
-    st.error(f"❌ Supabase connection failed: {e}")
-    st.stop()
-
-# -----------------------------
-# LOGIN SYSTEM
-# -----------------------------
-if "user" not in st.session_state:
-    st.session_state.user = None
-
-def login_page():
-    st.title("🔐 Login")
-
-    tab1, tab2 = st.tabs(["Login", "Sign Up"])
-
-    with tab1:
-        email = st.text_input("Email")
-        password = st.text_input("Password", type="password")
-
-        if st.button("Login"):
-            try:
-                user = supabase.auth.sign_in_with_password({
-                    "email": email,
-                    "password": password
-                })
-                st.session_state.user = user
-                st.success("Login successful")
-                st.rerun()
-            except Exception as e:
-                st.error(f"Login failed: {e}")
-
-    with tab2:
-        new_email = st.text_input("New Email")
-        new_password = st.text_input("New Password", type="password")
-
-        if st.button("Sign Up"):
-            try:
-                supabase.auth.sign_up({
-                    "email": new_email,
-                    "password": new_password
-                })
-                st.success("Account created! Now login")
-            except Exception as e:
-                st.error(f"Signup failed: {e}")
-
-if st.session_state.user is None:
-    login_page()
-    st.stop()
-
-# -----------------------------
-# LOGOUT
-# -----------------------------
-if st.sidebar.button("🚪 Logout"):
-    st.session_state.user = None
-    st.rerun()
-
-# -----------------------------
-# HEADER
-# -----------------------------
 st.title("🩺 AI Healthcare System")
 
 # -----------------------------
-# MODEL SETUP (FIXED)
+# MODEL LOAD (SAFE)
 # -----------------------------
 MODEL_PATH = "model.keras"
-FILE_ID = "1GRO5EwB9PDX61G1lZfIHChvCK7JkYe6v"
 CLASS_NAMES = ['COVID19','NORMAL','PNEUMONIA','TUBERCULOSIS']
 
 @st.cache_resource
 def load_model():
     try:
         if not os.path.exists(MODEL_PATH):
-            st.warning("⬇️ Downloading model...")
-            gdown.download(id=FILE_ID, output=MODEL_PATH, quiet=False)
-
-        st.write("📁 Model exists:", os.path.exists(MODEL_PATH))
+            st.error("❌ model.keras not found in folder")
+            return None
 
         model = tf.keras.models.load_model(MODEL_PATH, compile=False)
         return model
 
     except Exception as e:
-        st.error(f"❌ Model loading failed: {e}")
+        st.error(f"❌ Model load error: {e}")
         return None
 
 model = load_model()
@@ -115,20 +41,19 @@ model = load_model()
 if model is None:
     st.stop()
 else:
-    st.success("✅ Model loaded successfully")
+    st.success("✅ Model loaded")
 
 # -----------------------------
-# INPUT
+# USER INPUT
 # -----------------------------
 name = st.sidebar.text_input("Patient Name")
 age = st.sidebar.number_input("Age", 0, 120)
 
 # -----------------------------
-# SAFE GRAD-CAM
+# GRAD-CAM (AUTO SAFE)
 # -----------------------------
 def gradcam(img_array):
     try:
-        # automatically find last conv layer
         last_conv_layer = None
         for layer in reversed(model.layers):
             if "conv" in layer.name:
@@ -165,7 +90,7 @@ def gradcam(img_array):
         return None
 
 # -----------------------------
-# PDF FUNCTION
+# PDF GENERATION
 # -----------------------------
 def generate_pdf(name, age, disease, conf, grad_path):
     file = f"/tmp/report_{uuid.uuid4().hex}.pdf"
@@ -192,7 +117,7 @@ def generate_pdf(name, age, disease, conf, grad_path):
     return file
 
 # -----------------------------
-# UPLOAD & PREDICTION
+# FILE UPLOAD
 # -----------------------------
 file = st.file_uploader("Upload Chest X-ray")
 
@@ -202,8 +127,6 @@ if file:
 
         img_resized = img.resize((224,224))
         arr = np.expand_dims(np.array(img_resized)/255, axis=0)
-
-        st.write("📊 Input shape:", arr.shape)
 
         preds = model.predict(arr)
 
@@ -222,7 +145,9 @@ if file:
             ax.bar(CLASS_NAMES, preds[0])
             st.pyplot(fig)
 
-        # Grad-CAM
+        # -----------------------------
+        # GRAD-CAM
+        # -----------------------------
         heat = gradcam(arr)
         grad_path = None
 
@@ -239,7 +164,9 @@ if file:
             grad_path = f"/tmp/grad_{uuid.uuid4().hex}.jpg"
             cv2.imwrite(grad_path, grad_img)
 
-        # PDF
+        # -----------------------------
+        # PDF DOWNLOAD
+        # -----------------------------
         if name:
             pdf = generate_pdf(name, age, disease, conf, grad_path)
 
@@ -254,4 +181,4 @@ if file:
             )
 
     except Exception as e:
-        st.error(f"❌ Prediction error: {e}")
+        st.error(f"❌ Error: {e}")
