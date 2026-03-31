@@ -18,13 +18,22 @@ from reportlab.lib.pagesizes import A4
 st.set_page_config(page_title="AI Healthcare", layout="wide")
 
 # -----------------------------
-# HEADER (BIG FONT FIXED)
+# HIDE DEFAULT LABELS
+# -----------------------------
+st.markdown("""
+<style>
+label {display: none !important;}
+</style>
+""", unsafe_allow_html=True)
+
+# -----------------------------
+# HEADER
 # -----------------------------
 st.markdown("""
 <h1 style='text-align:center; font-size:48px; color:#2E86C1;'>
 🩺 AI Chest Disease Detection
 </h1>
-<p style='text-align:center; font-size:22px; color:#555;'>
+<p style='text-align:center; font-size:22px;'>
 Smart Healthcare Platform | Explainable AI
 </p>
 <hr>
@@ -58,11 +67,15 @@ FALLBACK_HOSPITALS = {
 }
 
 # -----------------------------
-# SIDEBAR
+# SIDEBAR (BIG LABELS)
 # -----------------------------
 st.sidebar.markdown("<h2>👤 Patient Details</h2>", unsafe_allow_html=True)
-patient_name = st.sidebar.text_input("Name")
-patient_age = st.sidebar.number_input("Age", 0, 120)
+
+st.sidebar.markdown("<p style='font-size:20px;'>Name</p>", unsafe_allow_html=True)
+patient_name = st.sidebar.text_input("", key="name")
+
+st.sidebar.markdown("<p style='font-size:20px;'>Age</p>", unsafe_allow_html=True)
+patient_age = st.sidebar.number_input("", 0, 120, key="age")
 
 # -----------------------------
 # LOAD MODEL
@@ -75,7 +88,7 @@ model = tf.keras.models.load_model(MODEL_PATH, compile=False)
 st.success("✅ Model Loaded")
 
 # -----------------------------
-# GRAD-CAM FUNCTION
+# GRAD-CAM
 # -----------------------------
 def get_gradcam_heatmap(model, img_array, layer_name):
     grad_model = tf.keras.models.Model(
@@ -130,14 +143,15 @@ def generate_report(name, age, disease, confidence):
     return file
 
 # -----------------------------
-# UPLOAD SECTION (BIG TEXT)
+# UPLOAD SECTION (BIG LABEL)
 # -----------------------------
 st.markdown("<h2 style='font-size:32px;'>📤 Upload Chest X-ray</h2>", unsafe_allow_html=True)
+st.markdown("<p style='font-size:20px;'>Upload Image</p>", unsafe_allow_html=True)
 
 col1, col2 = st.columns(2)
 
 with col1:
-    uploaded_file = st.file_uploader("Upload Image", type=["jpg","png","jpeg"])
+    uploaded_file = st.file_uploader("", type=["jpg","png","jpeg"])
 
 with col2:
     if uploaded_file:
@@ -158,7 +172,6 @@ if uploaded_file:
     pred = CLASS_NAMES[np.argmax(preds)]
     conf = np.max(preds)*100
 
-    # RESULT CARD
     st.markdown(f"""
     <div style="padding:20px;border-radius:12px;background:#f4f6f7;border-left:6px solid #2E86C1;font-size:22px;">
     <b>🧠 Prediction:</b> {pred} <br>
@@ -170,9 +183,7 @@ if uploaded_file:
     st.progress(int(conf))
     st.info(DISEASE_INFO.get(pred))
 
-    # -----------------------------
-    # GRAD-CAM
-    # -----------------------------
+    # Grad-CAM
     st.markdown("<h2 style='font-size:32px;'>🧠 AI Explanation (Grad-CAM)</h2>", unsafe_allow_html=True)
 
     try:
@@ -187,9 +198,7 @@ if uploaded_file:
     except Exception as e:
         st.error(f"Grad-CAM Error: {e}")
 
-    # -----------------------------
-    # HOSPITALS
-    # -----------------------------
+    # Hospitals
     st.markdown("<h2 style='font-size:32px;'>🏥 Recommended Hospitals</h2>", unsafe_allow_html=True)
 
     city = st.text_input("Enter City")
@@ -198,15 +207,11 @@ if uploaded_file:
         for h in FALLBACK_HOSPITALS.get(city.title(), []):
             st.markdown(f"<div style='padding:15px;background:#eef3f7;margin:10px 0;border-radius:10px;font-size:20px;'>🏥 {h}</div>", unsafe_allow_html=True)
 
-    # -----------------------------
-    # DOWNLOAD
-    # -----------------------------
+    # Download
     if patient_name and patient_age:
         file = generate_report(patient_name, patient_age, pred, conf)
         with open(file,"rb") as f:
             st.download_button("📄 Download Report", f)
 
-# -----------------------------
-# FOOTER
-# -----------------------------
+# Footer
 st.markdown("<hr><p style='text-align:center;font-size:18px;'>AI Healthcare System 🚀</p>", unsafe_allow_html=True)
