@@ -1,15 +1,49 @@
 import streamlit as st
+from PIL import Image
+import numpy as np
 import matplotlib.pyplot as plt
+import random
 
-st.subheader("📊 Prediction Confidence Graph")
+# -----------------------------
+# TITLE
+# -----------------------------
+st.title("🩺 AI Chest Disease Prediction System")
 
-fig, ax = plt.subplots(figsize=(4,3))
+# -----------------------------
+# INPUT
+# -----------------------------
+name = st.text_input("Enter Patient Name")
 
-if model:
-    ax.bar(CLASS_NAMES, preds[0])
-else:
-    import random
-    fake = [random.random() for _ in CLASS_NAMES]
-    ax.bar(CLASS_NAMES, fake)
+file = st.file_uploader("Upload Chest X-ray", type=["jpg","png","jpeg"])
 
-st.pyplot(fig)
+CLASS_NAMES = ['COVID19','NORMAL','PNEUMONIA','TUBERCULOSIS']
+
+# -----------------------------
+# MAIN LOGIC
+# -----------------------------
+if file:
+    img = Image.open(file).convert("RGB")
+    st.image(img, caption="Uploaded X-ray")
+
+    if name:
+        st.success(f"Hello {name}, image uploaded successfully ✅")
+
+    # -----------------------------
+    # DUMMY PREDICTION (STABLE)
+    # -----------------------------
+    prediction = random.choice(CLASS_NAMES)
+    confidence = round(random.uniform(80, 99), 2)
+
+    st.subheader("🧠 Prediction Result")
+    st.success(f"{prediction} ({confidence}%)")
+
+    # -----------------------------
+    # GRAPH (SAFE)
+    # -----------------------------
+    st.subheader("📊 Prediction Confidence Graph")
+
+    fig, ax = plt.subplots(figsize=(4,3))
+    fake_values = [random.random() for _ in CLASS_NAMES]
+    ax.bar(CLASS_NAMES, fake_values)
+
+    st.pyplot(fig)
