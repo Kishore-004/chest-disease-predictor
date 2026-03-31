@@ -1,9 +1,5 @@
 streamlit
-tensorflow
 numpy
 pillow
-gdown
-opencv-python-headless
 matplotlib
 reportlab
-protobuf<4
