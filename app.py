@@ -18,56 +18,15 @@ from reportlab.lib.pagesizes import A4
 st.set_page_config(page_title="AI Healthcare", layout="wide")
 
 # -----------------------------
-# FINAL UI FIX (WORKING)
+# HEADER (BIG + BOLD)
 # -----------------------------
 st.markdown("""
-<style>
-
-/* 🔥 FIX LABEL SIZE */
-div[data-testid="stWidgetLabel"] label {
-    font-size: 22px !important;
-    font-weight: 600 !important;
-}
-
-/* Sidebar labels */
-section[data-testid="stSidebar"] div[data-testid="stWidgetLabel"] label {
-    font-size: 22px !important;
-}
-
-/* Input text */
-input {
-    font-size: 18px !important;
-}
-
-/* Number input */
-div[data-baseweb="input"] input {
-    font-size: 18px !important;
-}
-
-/* File uploader text */
-div[data-testid="stFileUploader"] label {
-    font-size: 22px !important;
-    font-weight: 600;
-}
-
-/* Buttons */
-button {
-    font-size: 18px !important;
-}
-
-/* Headings */
-h1 { font-size: 48px !important; }
-h2 { font-size: 32px !important; }
-
-</style>
-""", unsafe_allow_html=True)
-
-# -----------------------------
-# HEADER
-# -----------------------------
-st.markdown("""
-<h1 style='text-align:center; color:#2E86C1;'>🩺 AI Chest Disease Detection</h1>
-<p style='text-align:center; font-size:22px;'>Smart Healthcare Platform | Explainable AI</p>
+<h1 style='text-align:center; font-size:52px; font-weight:800; color:#2E86C1;'>
+🩺 AI Chest Disease Detection
+</h1>
+<p style='text-align:center; font-size:24px; font-weight:500;'>
+Smart Healthcare Platform | Explainable AI
+</p>
 <hr>
 """, unsafe_allow_html=True)
 
@@ -99,11 +58,15 @@ FALLBACK_HOSPITALS = {
 }
 
 # -----------------------------
-# SIDEBAR
+# SIDEBAR (BIG LABELS)
 # -----------------------------
-st.sidebar.header("👤 Patient Details")
-patient_name = st.sidebar.text_input("Name")
-patient_age = st.sidebar.number_input("Age", 0, 120)
+st.sidebar.markdown("<h2 style='font-size:26px;'>👤 Patient Details</h2>", unsafe_allow_html=True)
+
+st.sidebar.markdown("<p style='font-size:22px; font-weight:600;'>Name</p>", unsafe_allow_html=True)
+patient_name = st.sidebar.text_input("", key="name")
+
+st.sidebar.markdown("<p style='font-size:22px; font-weight:600;'>Age</p>", unsafe_allow_html=True)
+patient_age = st.sidebar.number_input("", 0, 120, key="age")
 
 # -----------------------------
 # LOAD MODEL
@@ -153,18 +116,20 @@ def overlay_heatmap(img, heatmap):
     return np.uint8(heatmap * 0.4 + img)
 
 # -----------------------------
-# UPLOAD
+# UPLOAD SECTION (BIG TEXT)
 # -----------------------------
-st.subheader("📤 Upload Chest X-ray")
+st.markdown("<h2 style='font-size:34px;'>📤 Upload Chest X-ray</h2>", unsafe_allow_html=True)
+
+st.markdown("<p style='font-size:22px; font-weight:600;'>Upload Image</p>", unsafe_allow_html=True)
 
 col1, col2 = st.columns(2)
 
 with col1:
-    uploaded_file = st.file_uploader("Upload Image", type=["jpg","png","jpeg"])
+    uploaded_file = st.file_uploader("", type=["jpg","png","jpeg"])
 
 with col2:
     if uploaded_file:
-        st.image(uploaded_file, use_container_width=True)
+        st.image(uploaded_file, caption="X-ray Preview", use_container_width=True)
 
 # -----------------------------
 # PREDICTION
@@ -174,21 +139,26 @@ if uploaded_file:
     img_resized = img.resize((224,224))
     img_array = np.expand_dims(np.array(img_resized)/255.0, axis=0)
 
-    with st.spinner("Analyzing..."):
+    with st.spinner("🔍 Analyzing X-ray..."):
         time.sleep(2)
         preds = model.predict(img_array)
 
     pred = CLASS_NAMES[np.argmax(preds)]
     conf = np.max(preds)*100
 
-    st.success(f"Prediction: {pred}")
-    st.write(f"Confidence: {conf:.2f}%")
+    st.markdown(f"""
+    <div style="padding:20px;border-radius:12px;background:#f4f6f7;border-left:6px solid #2E86C1;font-size:22px;">
+    <b>🧠 Prediction:</b> {pred} <br>
+    <b>👨‍⚕ Specialist:</b> {DISEASE_SPECIALIST.get(pred)} <br>
+    <b>🎯 Confidence:</b> {conf:.2f}%
+    </div>
+    """, unsafe_allow_html=True)
 
     st.progress(int(conf))
     st.info(DISEASE_INFO.get(pred))
 
     # Grad-CAM
-    st.subheader("🧠 AI Explanation")
+    st.markdown("<h2 style='font-size:32px;'>🧠 AI Explanation (Grad-CAM)</h2>", unsafe_allow_html=True)
 
     try:
         heatmap = get_gradcam_heatmap(model, img_array, "conv5_block16_concat")
@@ -199,17 +169,24 @@ if uploaded_file:
         c2.image(gradcam, caption="AI Focus")
 
     except Exception as e:
-        st.error(e)
+        st.error(f"Grad-CAM Error: {e}")
 
     # Hospitals
-    st.subheader("🏥 Recommended Hospitals")
+    st.markdown("<h2 style='font-size:32px;'>🏥 Recommended Hospitals</h2>", unsafe_allow_html=True)
 
     city = st.text_input("Enter City")
 
     if city:
         for h in FALLBACK_HOSPITALS.get(city.title(), []):
-            st.write("🏥", h)
+            st.markdown(f"<div style='padding:15px;background:#eef3f7;margin:10px 0;border-radius:10px;font-size:20px;'>🏥 {h}</div>", unsafe_allow_html=True)
 
-# Footer
-st.markdown("---")
-st.write("AI Healthcare System 🚀")
+    # Download
+    if patient_name and patient_age:
+        file = generate_report(patient_name, patient_age, pred, conf)
+        with open(file,"rb") as f:
+            st.download_button("📄 Download Report", f)
+
+# -----------------------------
+# FOOTER
+# -----------------------------
+st.markdown("<hr><p style='text-align:center;font-size:18px;'>AI Healthcare System 🚀</p>", unsafe_allow_html=True)
