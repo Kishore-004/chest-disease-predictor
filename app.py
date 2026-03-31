@@ -58,7 +58,25 @@ FALLBACK_HOSPITALS = {
 }
 
 # -----------------------------
-# SIDEBAR (BIG)
+# PDF FUNCTION (FIXED POSITION)
+# -----------------------------
+def generate_report(name, age, disease, confidence):
+    file = "/tmp/report.pdf"
+    doc = SimpleDocTemplate(file, pagesize=A4)
+    styles = getSampleStyleSheet()
+
+    text = f"""
+    Patient: {name}<br/>
+    Age: {age}<br/>
+    Disease: {disease}<br/>
+    Confidence: {confidence:.2f}%
+    """
+
+    doc.build([Paragraph(text, styles["Normal"])])
+    return file
+
+# -----------------------------
+# SIDEBAR (BIG UI)
 # -----------------------------
 st.sidebar.markdown("<h1 style='font-size:32px;'>👤 Patient Details</h1>", unsafe_allow_html=True)
 
@@ -116,7 +134,7 @@ def overlay_heatmap(img, heatmap):
     return np.uint8(heatmap * 0.4 + img)
 
 # -----------------------------
-# UPLOAD SECTION (BIG)
+# UPLOAD SECTION
 # -----------------------------
 st.markdown("<h1 style='font-size:42px;'>📤 Upload Chest X-ray</h1>", unsafe_allow_html=True)
 st.markdown("<p style='font-size:26px; font-weight:700;'>Upload Image</p>", unsafe_allow_html=True)
@@ -145,7 +163,7 @@ if uploaded_file:
     pred = CLASS_NAMES[np.argmax(preds)]
     conf = np.max(preds)*100
 
-    # RESULT CARD (BIG)
+    # RESULT CARD
     st.markdown(f"""
     <div style="padding:25px;border-radius:15px;background:#f4f6f7;
     border-left:8px solid #2E86C1;font-size:28px;font-weight:600;">
@@ -186,29 +204,11 @@ if uploaded_file:
             </div>
             """, unsafe_allow_html=True)
 
-    # Download
+    # Download Report
     if patient_name and patient_age:
         file = generate_report(patient_name, patient_age, pred, conf)
         with open(file,"rb") as f:
             st.download_button("📄 Download Report", f)
-
-# -----------------------------
-# PDF FUNCTION
-# -----------------------------
-def generate_report(name, age, disease, confidence):
-    file = "/tmp/report.pdf"
-    doc = SimpleDocTemplate(file, pagesize=A4)
-    styles = getSampleStyleSheet()
-
-    text = f"""
-    Patient: {name}<br/>
-    Age: {age}<br/>
-    Disease: {disease}<br/>
-    Confidence: {confidence:.2f}%
-    """
-
-    doc.build([Paragraph(text, styles["Normal"])])
-    return file
 
 # -----------------------------
 # FOOTER
