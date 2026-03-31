@@ -19,8 +19,8 @@ st.set_page_config(page_title="AI Healthcare", layout="wide")
 # HEADER
 # -----------------------------
 st.markdown("""
-<h1 style='text-align:center; font-size:60px;'>🩺 AI Healthcare System</h1>
-<p style='text-align:center; font-size:28px;'>Chest Disease Detection</p>
+<h1 style='text-align:center; font-size:55px;'>🩺 AI Healthcare System</h1>
+<p style='text-align:center; font-size:26px;'>Chest Disease Detection</p>
 <hr>
 """, unsafe_allow_html=True)
 
@@ -33,8 +33,8 @@ CLASS_NAMES = ['COVID19','NORMAL','PNEUMONIA','TURBERCULOSIS']
 
 DISEASE_INFO = {
     "COVID19": "COVID-19 is a viral infection affecting lungs causing fever, cough and breathing issues.",
-    "PNEUMONIA": "Pneumonia is a lung infection causing inflammation and difficulty breathing.",
-    "TURBERCULOSIS": "Tuberculosis is a bacterial infection affecting lungs requiring long treatment.",
+    "PNEUMONIA": "Pneumonia is a lung infection causing inflammation and breathing difficulty.",
+    "TURBERCULOSIS": "Tuberculosis is a bacterial lung infection requiring long-term treatment.",
     "NORMAL": "No abnormalities detected."
 }
 
@@ -104,9 +104,9 @@ def gradcam(img_array):
     return heatmap
 
 # -----------------------------
-# PDF FUNCTION (UPDATED FINAL)
+# PDF FUNCTION
 # -----------------------------
-def generate_pdf(name, age, disease, conf, symptoms, hospitals, specialist, description, grad_path, city):
+def generate_pdf(name, age, disease, conf, symptoms, hospitals, specialist, description, grad_path, graph_path, city):
     file = f"/tmp/report_{uuid.uuid4().hex}.pdf"
     doc = SimpleDocTemplate(file, pagesize=A4)
     styles = getSampleStyleSheet()
@@ -120,38 +120,39 @@ def generate_pdf(name, age, disease, conf, symptoms, hospitals, specialist, desc
     elements.append(Paragraph(f"Age: {age}", styles["Normal"]))
     elements.append(Spacer(1,10))
 
-    # Symptoms
     elements.append(Paragraph("<b>Symptoms:</b>", styles["Heading2"]))
     elements.append(Paragraph(", ".join(symptoms) if symptoms else "None", styles["Normal"]))
     elements.append(Spacer(1,10))
 
-    # Diagnosis
     elements.append(Paragraph("<b>Diagnosis:</b>", styles["Heading2"]))
     elements.append(Paragraph(f"Disease: {disease}", styles["Normal"]))
     elements.append(Paragraph(f"Confidence: {conf:.2f}%", styles["Normal"]))
     elements.append(Paragraph(f"Specialist: {specialist}", styles["Normal"]))
     elements.append(Spacer(1,10))
 
-    # Explanation
     elements.append(Paragraph("<b>Disease Explanation:</b>", styles["Heading2"]))
     elements.append(Paragraph(description, styles["Normal"]))
     elements.append(Spacer(1,10))
 
-    # Hospitals
     elements.append(Paragraph("<b>Recommended Hospitals:</b>", styles["Heading2"]))
     for h in hospitals:
         elements.append(Paragraph(f"• {h} ({specialist})", styles["Normal"]))
-        
-        # Maps link
-        map_link = f"https://www.google.com/maps/search/?api=1&query={h.replace(' ','+')+ '+' + city}"
-        elements.append(Paragraph(f"<a href='{map_link}'>View on Google Maps</a>", styles["Normal"]))
+        link = f"https://www.google.com/maps/search/?api=1&query={h.replace(' ','+')+'+'+city}"
+        elements.append(Paragraph(f"<a href='{link}'>View on Maps</a>", styles["Normal"]))
 
     elements.append(Spacer(1,15))
 
-    # Grad-CAM AFTER hospitals
+    # Grad-CAM
     if grad_path:
-        elements.append(Paragraph("<b>AI Explanation (Grad-CAM)</b>", styles["Heading2"]))
+        elements.append(Paragraph("<b>Grad-CAM</b>", styles["Heading2"]))
         elements.append(RLImage(grad_path, width=4*inch, height=4*inch))
+
+    elements.append(Spacer(1,15))
+
+    # Graph
+    if graph_path:
+        elements.append(Paragraph("<b>Prediction Graph</b>", styles["Heading2"]))
+        elements.append(RLImage(graph_path, width=4*inch, height=3*inch))
 
     doc.build(elements)
     return file
@@ -159,11 +160,10 @@ def generate_pdf(name, age, disease, conf, symptoms, hospitals, specialist, desc
 # -----------------------------
 # UPLOAD
 # -----------------------------
-file = st.file_uploader("Upload X-ray")
+uploaded_file = st.file_uploader("Upload X-ray")
 
-if file:
-    img = Image.open(file).convert("RGB")
-    st.image(img)
+if uploaded_file:
+    img = Image.open(uploaded_file).convert("RGB")
 
     img_resized = img.resize((224,224))
     arr = np.expand_dims(np.array(img_resized)/255, axis=0)
@@ -174,7 +174,22 @@ if file:
 
     st.success(f"{disease} ({conf:.2f}%)")
 
-    # Grad-CAM
+    # IMAGE + GRAPH
+    col1, col2 = st.columns(2)
+
+    with col1:
+        st.image(img, caption="X-ray", use_container_width=True)
+
+    with col2:
+        fig, ax = plt.subplots(figsize=(4,3))
+        ax.bar(CLASS_NAMES, preds[0])
+        ax.set_title("Confidence")
+        st.pyplot(fig)
+
+    graph_path = f"/tmp/graph_{uuid.uuid4().hex}.png"
+    fig.savefig(graph_path)
+
+    # GRAD-CAM
     heat = gradcam(arr)
     heat = heat.numpy() if hasattr(heat,"numpy") else heat
 
@@ -190,7 +205,7 @@ if file:
     grad_path = f"/tmp/grad_{uuid.uuid4().hex}.jpg"
     cv2.imwrite(grad_path, grad_img)
 
-    # City
+    # CITY
     city = st.text_input("Enter City")
 
     # PDF
@@ -204,13 +219,9 @@ if file:
             DISEASE_SPECIALIST.get(disease),
             DISEASE_INFO.get(disease),
             grad_path,
+            graph_path,
             city
         )
 
         with open(pdf, "rb") as f:
-            st.download_button(
-                "📄 Download Full Medical Report",
-                f,
-                file_name="AI_Medical_Report.pdf",
-                mime="application/pdf"
-            )
+            st.download_button("📄 Download Full Report", f)
