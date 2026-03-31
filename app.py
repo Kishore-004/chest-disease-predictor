@@ -15,7 +15,41 @@ from reportlab.lib.pagesizes import A4
 # -----------------------------
 # PAGE CONFIG
 # -----------------------------
-st.set_page_config(page_title="AI Medical System", layout="wide")
+st.set_page_config(page_title="AI Healthcare", layout="wide")
+
+# -----------------------------
+# CUSTOM UI STYLE
+# -----------------------------
+st.markdown("""
+<style>
+.stApp {
+    background: linear-gradient(to right, #e3f2fd, #ffffff);
+}
+
+section[data-testid="stSidebar"] {
+    background-color: #d6eaf8;
+}
+
+.card {
+    padding: 20px;
+    border-radius: 12px;
+    background-color: #ffffff;
+    box-shadow: 0px 4px 10px rgba(0,0,0,0.1);
+    border-left: 6px solid #2E86C1;
+    margin-bottom: 15px;
+}
+
+.stButton>button {
+    background-color: #2E86C1;
+    color: white;
+    border-radius: 8px;
+}
+
+.stProgress > div > div {
+    background-color: #2E86C1;
+}
+</style>
+""", unsafe_allow_html=True)
 
 # -----------------------------
 # CONFIG
@@ -51,15 +85,15 @@ FALLBACK_HOSPITALS = {
 # HEADER
 # -----------------------------
 st.markdown("""
-<h1 style='text-align: center; color: #2E86C1;'>🩺 AI Chest Disease Detection</h1>
-<p style='text-align: center;'>Explainable AI System</p>
+<h1 style='text-align:center; color:#2E86C1;'>🩺 AI Chest Disease Detection</h1>
+<p style='text-align:center;'>Smart Healthcare | Explainable AI</p>
 <hr>
 """, unsafe_allow_html=True)
 
 # -----------------------------
 # SIDEBAR
 # -----------------------------
-st.sidebar.header("Patient Details")
+st.sidebar.header("👤 Patient Details")
 patient_name = st.sidebar.text_input("Name")
 patient_age = st.sidebar.number_input("Age", 0, 120)
 
@@ -71,10 +105,10 @@ if not os.path.exists(MODEL_PATH):
     gdown.download(f"https://drive.google.com/uc?id={FILE_ID}", MODEL_PATH)
 
 model = tf.keras.models.load_model(MODEL_PATH, compile=False)
-st.success("Model Loaded")
+st.success("✅ Model Loaded")
 
 # -----------------------------
-# GRAD-CAM FIXED
+# GRAD-CAM FUNCTION (FINAL FIX)
 # -----------------------------
 def get_gradcam_heatmap(model, img_array, layer_name):
     grad_model = tf.keras.models.Model(
@@ -85,7 +119,6 @@ def get_gradcam_heatmap(model, img_array, layer_name):
     with tf.GradientTape() as tape:
         conv_outputs, predictions = grad_model(img_array)
 
-        # FIX for list/tensor issue
         if isinstance(predictions, list):
             predictions = predictions[0]
 
@@ -130,18 +163,18 @@ def generate_report(name, age, disease, confidence):
     return file
 
 # -----------------------------
-# UI
+# UPLOAD UI
 # -----------------------------
-st.subheader("Upload X-ray")
+st.markdown("## 📤 Upload Chest X-ray")
 
 col1, col2 = st.columns(2)
 
 with col1:
-    uploaded_file = st.file_uploader("Upload Image", type=["jpg","png","jpeg"])
+    uploaded_file = st.file_uploader("Upload X-ray Image", type=["jpg","png","jpeg"])
 
 with col2:
     if uploaded_file:
-        st.image(uploaded_file, use_container_width=True)
+        st.image(uploaded_file, caption="X-ray Preview", use_container_width=True)
 
 # -----------------------------
 # PREDICTION
@@ -151,17 +184,19 @@ if uploaded_file:
     img_resized = img.resize((224,224))
     img_array = np.expand_dims(np.array(img_resized)/255.0, axis=0)
 
-    with st.spinner("Analyzing..."):
+    with st.spinner("🔍 Analyzing X-ray..."):
         time.sleep(2)
         preds = model.predict(img_array)
 
     pred = CLASS_NAMES[np.argmax(preds)]
     conf = np.max(preds)*100
 
+    # RESULT CARD
     st.markdown(f"""
-    <div style="padding:20px;background:#EAF2F8;border-left:6px solid #2E86C1">
-    <h3>{pred}</h3>
-    <p>Confidence: {conf:.2f}%</p>
+    <div class="card">
+    <h3>🧠 Prediction: {pred}</h3>
+    <p>👨‍⚕ Specialist: {DISEASE_SPECIALIST.get(pred)}</p>
+    <p>🎯 Confidence: {conf:.2f}%</p>
     </div>
     """, unsafe_allow_html=True)
 
@@ -169,9 +204,9 @@ if uploaded_file:
     st.info(DISEASE_INFO.get(pred))
 
     # -----------------------------
-    # GRAD-CAM FINAL
+    # GRAD-CAM
     # -----------------------------
-    st.subheader("Grad-CAM")
+    st.markdown("## 🧠 AI Explanation (Grad-CAM)")
 
     try:
         layer_name = "conv5_block16_concat"
@@ -180,8 +215,8 @@ if uploaded_file:
         gradcam = overlay_heatmap(np.array(img_resized), heatmap)
 
         c1, c2 = st.columns(2)
-        c1.image(img_resized, caption="Original")
-        c2.image(gradcam, caption="Grad-CAM")
+        c1.image(img_resized, caption="Original X-ray")
+        c2.image(gradcam, caption="AI Focus Area")
 
     except Exception as e:
         st.error(f"Grad-CAM Error: {e}")
@@ -189,22 +224,27 @@ if uploaded_file:
     # -----------------------------
     # HOSPITALS
     # -----------------------------
+    st.markdown("## 🏥 Recommended Hospitals")
     city = st.text_input("Enter City")
 
     if city:
         for h in FALLBACK_HOSPITALS.get(city.title(), []):
-            st.success(h)
+            st.markdown(f"<div class='card'>🏥 {h}</div>", unsafe_allow_html=True)
 
     # -----------------------------
-    # DOWNLOAD
+    # DOWNLOAD REPORT
     # -----------------------------
     if patient_name and patient_age:
         file = generate_report(patient_name, patient_age, pred, conf)
         with open(file,"rb") as f:
-            st.download_button("Download Report", f)
+            st.download_button("📄 Download Medical Report", f)
 
 # -----------------------------
 # FOOTER
 # -----------------------------
-st.markdown("---")
-st.markdown("AI Healthcare System 🚀")
+st.markdown("""
+<hr>
+<p style='text-align:center; color:gray;'>
+Developed by Krish | AI Healthcare System 🚀
+</p>
+""", unsafe_allow_html=True)
