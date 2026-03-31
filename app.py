@@ -15,17 +15,19 @@ from reportlab.lib.units import inch
 # PAGE CONFIG
 # -----------------------------
 st.set_page_config(page_title="AI Healthcare", layout="wide")
+st.write("✅ App started successfully")
 
 # -----------------------------
-# SUPABASE CONFIG (SAFE)
+# SUPABASE CONFIG
 # -----------------------------
 SUPABASE_URL = "https://zpizagggcjbfgbixnchx.supabase.co"
-SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InpwaXphZ2dnY2piZmdiaXhuY2h4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzEzODgwMjksImV4cCI6MjA4Njk2NDAyOX0.WjFnysMu0cwjK7ky0eGEcEUSHoEoBrajhIfX6bODHj4"
+SUPABASE_KEY = "YOUR_NEW_SAFE_KEY"  # ⚠️ Replace with new key
 
 try:
     supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
+    st.write("✅ Supabase connected")
 except Exception as e:
-    st.error("Supabase connection failed")
+    st.error(f"❌ Supabase connection failed: {e}")
     st.stop()
 
 # -----------------------------
@@ -53,7 +55,7 @@ def login_page():
                 st.success("Login successful")
                 st.rerun()
             except Exception as e:
-                st.error("Invalid credentials")
+                st.error(f"Login failed: {e}")
 
     with tab2:
         new_email = st.text_input("New Email")
@@ -66,8 +68,8 @@ def login_page():
                     "password": new_password
                 })
                 st.success("Account created! Now login")
-            except:
-                st.error("Signup failed")
+            except Exception as e:
+                st.error(f"Signup failed: {e}")
 
 if st.session_state.user is None:
     login_page()
@@ -86,21 +88,34 @@ if st.sidebar.button("🚪 Logout"):
 st.title("🩺 AI Healthcare System")
 
 # -----------------------------
-# MODEL SETUP
+# MODEL SETUP (FIXED)
 # -----------------------------
-MODEL_PATH = "final_chest_disease_model.keras"
+MODEL_PATH = "model.keras"
 FILE_ID = "1GRO5EwB9PDX61G1lZfIHChvCK7JkYe6v"
-CLASS_NAMES = ['COVID19','NORMAL','PNEUMONIA','TURBERCULOSIS']
+CLASS_NAMES = ['COVID19','NORMAL','PNEUMONIA','TUBERCULOSIS']
 
-if not os.path.exists(MODEL_PATH):
-    with st.spinner("Downloading model..."):
-        gdown.download(
-            f"https://drive.google.com/uc?id={FILE_ID}",
-            MODEL_PATH,
-            quiet=False
-        )
+@st.cache_resource
+def load_model():
+    try:
+        if not os.path.exists(MODEL_PATH):
+            st.warning("⬇️ Downloading model...")
+            gdown.download(id=FILE_ID, output=MODEL_PATH, quiet=False)
 
-model = tf.keras.models.load_model(MODEL_PATH, compile=False)
+        st.write("📁 Model exists:", os.path.exists(MODEL_PATH))
+
+        model = tf.keras.models.load_model(MODEL_PATH, compile=False)
+        return model
+
+    except Exception as e:
+        st.error(f"❌ Model loading failed: {e}")
+        return None
+
+model = load_model()
+
+if model is None:
+    st.stop()
+else:
+    st.success("✅ Model loaded successfully")
 
 # -----------------------------
 # INPUT
@@ -109,23 +124,27 @@ name = st.sidebar.text_input("Patient Name")
 age = st.sidebar.number_input("Age", 0, 120)
 
 # -----------------------------
-# GRAD-CAM (SAFE)
+# SAFE GRAD-CAM
 # -----------------------------
 def gradcam(img_array):
     try:
-        layer = "conv5_block16_concat"
+        # automatically find last conv layer
+        last_conv_layer = None
+        for layer in reversed(model.layers):
+            if "conv" in layer.name:
+                last_conv_layer = layer.name
+                break
+
+        if last_conv_layer is None:
+            return None
 
         grad_model = tf.keras.models.Model(
             inputs=model.inputs,
-            outputs=[model.get_layer(layer).output, model.output]
+            outputs=[model.get_layer(last_conv_layer).output, model.output]
         )
 
         with tf.GradientTape() as tape:
             conv_outputs, predictions = grad_model(img_array)
-
-            if isinstance(predictions, list):
-                predictions = predictions[0]
-
             class_idx = tf.argmax(predictions[0])
             loss = predictions[:, class_idx]
 
@@ -137,11 +156,12 @@ def gradcam(img_array):
         heatmap = tf.reduce_sum(heatmap, axis=-1)
 
         heatmap = np.maximum(heatmap, 0)
-        heatmap = heatmap / (np.max(heatmap) + 1e-8)
+        heatmap /= (np.max(heatmap) + 1e-8)
 
         return heatmap
 
-    except:
+    except Exception as e:
+        st.warning(f"Grad-CAM skipped: {e}")
         return None
 
 # -----------------------------
@@ -172,61 +192,66 @@ def generate_pdf(name, age, disease, conf, grad_path):
     return file
 
 # -----------------------------
-# UPLOAD
+# UPLOAD & PREDICTION
 # -----------------------------
 file = st.file_uploader("Upload Chest X-ray")
 
 if file:
-    img = Image.open(file).convert("RGB")
+    try:
+        img = Image.open(file).convert("RGB")
 
-    img_resized = img.resize((224,224))
-    arr = np.expand_dims(np.array(img_resized)/255, axis=0)
+        img_resized = img.resize((224,224))
+        arr = np.expand_dims(np.array(img_resized)/255, axis=0)
 
-    preds = model.predict(arr)
-    disease = CLASS_NAMES[np.argmax(preds)]
-    conf = np.max(preds)*100
+        st.write("📊 Input shape:", arr.shape)
 
-    st.success(f"{disease} ({conf:.2f}%)")
+        preds = model.predict(arr)
 
-    col1, col2 = st.columns(2)
+        disease = CLASS_NAMES[np.argmax(preds)]
+        conf = np.max(preds)*100
 
-    with col1:
-        st.image(img)
+        st.success(f"{disease} ({conf:.2f}%)")
 
-    with col2:
-        fig, ax = plt.subplots(figsize=(4,3))
-        ax.bar(CLASS_NAMES, preds[0])
-        st.pyplot(fig)
+        col1, col2 = st.columns(2)
 
-    # Grad-CAM
-    heat = gradcam(arr)
+        with col1:
+            st.image(img)
 
-    grad_path = None
+        with col2:
+            fig, ax = plt.subplots()
+            ax.bar(CLASS_NAMES, preds[0])
+            st.pyplot(fig)
 
-    if heat is not None:
-        heat = heat.numpy() if hasattr(heat,"numpy") else heat
-        heat = cv2.resize(heat,(224,224))
-        heat = np.uint8(255*heat)
-        heat = cv2.applyColorMap(heat, cv2.COLORMAP_JET)
+        # Grad-CAM
+        heat = gradcam(arr)
+        grad_path = None
 
-        grad_img = heat*0.4 + np.array(img_resized)
-        grad_img = np.uint8(grad_img)
+        if heat is not None:
+            heat = cv2.resize(heat, (224,224))
+            heat = np.uint8(255*heat)
+            heat = cv2.applyColorMap(heat, cv2.COLORMAP_JET)
 
-        st.image(grad_img)
+            grad_img = heat*0.4 + np.array(img_resized)
+            grad_img = np.uint8(grad_img)
 
-        grad_path = f"/tmp/grad_{uuid.uuid4().hex}.jpg"
-        cv2.imwrite(grad_path, grad_img)
+            st.image(grad_img)
 
-    # PDF
-    if name:
-        pdf = generate_pdf(name, age, disease, conf, grad_path)
+            grad_path = f"/tmp/grad_{uuid.uuid4().hex}.jpg"
+            cv2.imwrite(grad_path, grad_img)
 
-        with open(pdf, "rb") as f:
-            pdf_bytes = f.read()
+        # PDF
+        if name:
+            pdf = generate_pdf(name, age, disease, conf, grad_path)
 
-        st.download_button(
-            "📄 Download Report",
-            data=pdf_bytes,
-            file_name="AI_Report.pdf",
-            mime="application/pdf"
-        )
+            with open(pdf, "rb") as f:
+                pdf_bytes = f.read()
+
+            st.download_button(
+                "📄 Download Report",
+                data=pdf_bytes,
+                file_name="AI_Report.pdf",
+                mime="application/pdf"
+            )
+
+    except Exception as e:
+        st.error(f"❌ Prediction error: {e}")
