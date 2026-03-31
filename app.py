@@ -4,13 +4,22 @@ import numpy as np
 from PIL import Image
 import gdown
 import os
-import requests
+import time
 
 # PDF Imports
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer
 from reportlab.lib.styles import getSampleStyleSheet
 from reportlab.lib.units import inch
 from reportlab.lib.pagesizes import A4
+
+# -----------------------------
+# PAGE CONFIG
+# -----------------------------
+st.set_page_config(
+    page_title="AI Medical System",
+    page_icon="🩺",
+    layout="wide"
+)
 
 # -----------------------------
 # CONFIG
@@ -20,7 +29,7 @@ FILE_ID = "1GRO5EwB9PDX61G1lZfIHChvCK7JkYe6v"
 CLASS_NAMES = ['COVID19', 'NORMAL', 'PNEUMONIA', 'TURBERCULOSIS']
 
 # -----------------------------
-# DISEASE → SPECIALIST
+# DISEASE DATA
 # -----------------------------
 DISEASE_SPECIALIST = {
     "COVID19": "Pulmonologist",
@@ -29,30 +38,36 @@ DISEASE_SPECIALIST = {
     "TURBERCULOSIS": "Chest Specialist"
 }
 
-# -----------------------------
-# DISEASE EXPLANATION
-# -----------------------------
 DISEASE_INFO = {
-    "COVID19": "COVID-19 is a viral respiratory infection affecting the lungs. Symptoms include fever, cough, and breathing difficulty.",
-    "PNEUMONIA": "Pneumonia is a lung infection causing inflammation in air sacs. Symptoms include chest pain and cough.",
-    "TURBERCULOSIS": "Tuberculosis is a bacterial infection affecting lungs and requires long-term treatment.",
+    "COVID19": "COVID-19 is a viral respiratory infection affecting the lungs.",
+    "PNEUMONIA": "Pneumonia is a lung infection causing inflammation in air sacs.",
+    "TURBERCULOSIS": "Tuberculosis is a bacterial infection affecting lungs.",
     "NORMAL": "No major abnormalities detected. Consult doctor if symptoms persist."
 }
 
-# -----------------------------
-# FALLBACK HOSPITALS
-# -----------------------------
 FALLBACK_HOSPITALS = {
     "Chennai": ["Apollo Hospitals", "MIOT International", "Fortis Malar Hospital"],
     "Madurai": ["Meenakshi Mission Hospital", "Government Rajaji Hospital"],
-    "Tirunelveli": ["Shifa Hospital", "Government Medical College Hospital Tirunelveli"],
-    "Trichy": ["Kauvery Hospital Trichy", "Government Medical College Hospital Trichy"],
-    "Villupuram": ["Government Medical College Hospital Villupuram"],
-    "Virudhunagar": ["Government Hospital Virudhunagar"],
-    "Tiruvannamalai": ["Government Medical College Hospital Tiruvannamalai"],
-    "Tiruvallur": ["Government Hospital Tiruvallur"],
-    "Tenkasi": ["Government Hospital Tenkasi"]
+    "Trichy": ["Kauvery Hospital", "Government Hospital Trichy"]
 }
+
+# -----------------------------
+# HEADER
+# -----------------------------
+st.markdown("""
+<h1 style='text-align: center; color: #2E86C1;'>
+🩺 AI Chest Disease Detection System
+</h1>
+<p style='text-align: center;'>Early Diagnosis | Smart Healthcare</p>
+<hr>
+""", unsafe_allow_html=True)
+
+# -----------------------------
+# SIDEBAR (PATIENT DETAILS)
+# -----------------------------
+st.sidebar.header("👤 Patient Details")
+patient_name = st.sidebar.text_input("Patient Name")
+patient_age = st.sidebar.number_input("Patient Age", 0, 120)
 
 # -----------------------------
 # DOWNLOAD MODEL
@@ -84,8 +99,8 @@ def generate_report(name, age, disease, confidence, specialist, description):
     Age: {age}<br/><br/>
     Predicted Disease: {disease}<br/>
     Confidence: {confidence:.2f}%<br/>
-    Recommended Specialist: {specialist}<br/><br/>
-    Explanation:<br/>{description}
+    Specialist: {specialist}<br/><br/>
+    {description}
     """
 
     elements.append(Paragraph(text, styles["Normal"]))
@@ -94,36 +109,55 @@ def generate_report(name, age, disease, confidence, specialist, description):
     return file_path
 
 # -----------------------------
-# STREAMLIT UI
+# UPLOAD SECTION
 # -----------------------------
-st.title("🩺 AI Chest Disease Prediction System")
+st.subheader("📤 Upload Chest X-ray")
 
-st.subheader("👤 Patient Details")
-patient_name = st.text_input("Patient Name")
-patient_age = st.number_input("Patient Age", min_value=0, max_value=120, step=1)
+col1, col2 = st.columns(2)
 
-uploaded_file = st.file_uploader("Upload Chest X-ray Image", type=["jpg", "jpeg", "png"])
+with col1:
+    uploaded_file = st.file_uploader("Upload Image", type=["jpg", "jpeg", "png"])
 
+with col2:
+    if uploaded_file:
+        st.image(uploaded_file, caption="X-ray Preview", use_container_width=True)
+
+# -----------------------------
+# PREDICTION
+# -----------------------------
 if uploaded_file:
     img = Image.open(uploaded_file).convert("RGB")
-    st.image(img, caption="Uploaded X-ray", use_container_width=True)
-
     img = img.resize((224, 224))
     img_array = np.expand_dims(np.array(img) / 255.0, axis=0)
 
-    prediction = model.predict(img_array)
+    with st.spinner("🔍 Analyzing X-ray..."):
+        time.sleep(2)
+        prediction = model.predict(img_array)
+
     predicted_class = CLASS_NAMES[np.argmax(prediction)]
     confidence = np.max(prediction) * 100
 
     specialist = DISEASE_SPECIALIST.get(predicted_class)
     description = DISEASE_INFO.get(predicted_class)
 
-    st.markdown(f"### 🧠 Predicted: **{predicted_class}**")
-    st.markdown(f"### 👨‍⚕ Recommended Specialist: **{specialist}**")
-    st.markdown(f"### 🎯 Confidence: **{confidence:.2f}%**")
+    # -----------------------------
+    # RESULT CARD
+    # -----------------------------
+    st.markdown(f"""
+    <div style="padding:20px;
+                border-radius:10px;
+                background-color:#EAF2F8;
+                border-left:6px solid #2E86C1;">
+    <h3>🧠 Prediction: {predicted_class}</h3>
+    <p>👨‍⚕ Specialist: {specialist}</p>
+    <p>🎯 Confidence: {confidence:.2f}%</p>
+    </div>
+    """, unsafe_allow_html=True)
 
-    st.markdown("### 📖 Disease Explanation")
-    st.write(description)
+    st.subheader("Confidence Level")
+    st.progress(int(confidence))
+
+    st.info(f"📖 {description}")
 
     # -----------------------------
     # HOSPITAL SECTION
@@ -131,18 +165,18 @@ if uploaded_file:
     user_city = st.text_input("🏙 Enter your city")
 
     if user_city:
-        formatted_city = user_city.title()
-        hospitals = FALLBACK_HOSPITALS.get(formatted_city, [])
+        city = user_city.title()
+        hospitals = FALLBACK_HOSPITALS.get(city, [])
 
-        st.subheader(f"🏥 Hospitals in {formatted_city}")
+        st.subheader(f"🏥 Hospitals in {city}")
 
         if hospitals:
             for hospital in hospitals:
-                map_query = hospital.replace(" ", "+")
-                map_link = f"https://www.google.com/maps/search/?api=1&query={map_query}+{formatted_city}"
-                st.markdown(f"• {hospital}  |  [📍 View on Map]({map_link})")
+                map_link = f"https://www.google.com/maps/search/{hospital}+{city}"
+                st.success(f"🏥 {hospital}")
+                st.markdown(f"[📍 View on Map]({map_link})")
         else:
-            st.write("No hospital data available for this city.")
+            st.warning("No hospital data available.")
 
     # -----------------------------
     # DOWNLOAD REPORT
@@ -159,16 +193,20 @@ if uploaded_file:
 
         with open(report_file, "rb") as f:
             st.download_button(
-                "📄 Download Medical Report",
+                "📄 Download Full Medical Report",
                 f,
                 file_name="AI_Medical_Report.pdf",
                 mime="application/pdf"
             )
 
 # -----------------------------
-# DISCLAIMER
+# FOOTER
 # -----------------------------
-st.markdown("---")
-st.markdown("⚠ This system is for educational purposes only. Please consult a certified medical professional.")
+st.markdown("""
+<hr>
+<p style='text-align:center'>
+Developed by Krish | AI Healthcare System 🚀
+</p>
+""", unsafe_allow_html=True)
 
 
