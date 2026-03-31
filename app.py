@@ -18,35 +18,64 @@ from reportlab.lib.pagesizes import A4
 st.set_page_config(page_title="AI Healthcare", layout="wide")
 
 # -----------------------------
-# CUSTOM UI STYLE
+# PREMIUM UI STYLE
 # -----------------------------
 st.markdown("""
 <style>
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+
+html, body, [class*="css"] {
+    font-family: 'Inter', sans-serif;
+    font-size: 18px;
+    color: #1f2d3d;
+}
+
 .stApp {
-    background: linear-gradient(to right, #e3f2fd, #ffffff);
+    background: linear-gradient(120deg, #f5f9ff, #ffffff);
 }
 
 section[data-testid="stSidebar"] {
-    background-color: #d6eaf8;
+    background: linear-gradient(180deg, #d6eaf8, #eaf4fc);
+    padding: 20px;
 }
 
-.card {
-    padding: 20px;
-    border-radius: 12px;
-    background-color: #ffffff;
-    box-shadow: 0px 4px 10px rgba(0,0,0,0.1);
-    border-left: 6px solid #2E86C1;
-    margin-bottom: 15px;
+h1 {
+    font-size: 44px !important;
+    font-weight: 700;
+}
+
+h2 {
+    font-size: 30px !important;
+}
+
+h3 {
+    font-size: 24px !important;
+}
+
+p, label {
+    font-size: 18px !important;
 }
 
 .stButton>button {
-    background-color: #2E86C1;
+    background: linear-gradient(135deg, #2E86C1, #3498DB);
     color: white;
-    border-radius: 8px;
+    border-radius: 10px;
+    font-size: 18px;
+    padding: 10px;
+}
+
+.card {
+    padding: 25px;
+    border-radius: 16px;
+    background: white;
+    box-shadow: 0px 6px 18px rgba(0,0,0,0.08);
+    border-left: 6px solid #2E86C1;
+    margin-bottom: 20px;
+    font-size: 20px;
 }
 
 .stProgress > div > div {
-    background-color: #2E86C1;
+    background: linear-gradient(90deg, #2E86C1, #5DADE2);
 }
 </style>
 """, unsafe_allow_html=True)
@@ -58,9 +87,6 @@ MODEL_PATH = "final_chest_disease_model.keras"
 FILE_ID = "1GRO5EwB9PDX61G1lZfIHChvCK7JkYe6v"
 CLASS_NAMES = ['COVID19', 'NORMAL', 'PNEUMONIA', 'TURBERCULOSIS']
 
-# -----------------------------
-# DATA
-# -----------------------------
 DISEASE_SPECIALIST = {
     "COVID19": "Pulmonologist",
     "NORMAL": "General Physician",
@@ -86,7 +112,7 @@ FALLBACK_HOSPITALS = {
 # -----------------------------
 st.markdown("""
 <h1 style='text-align:center; color:#2E86C1;'>🩺 AI Chest Disease Detection</h1>
-<p style='text-align:center;'>Smart Healthcare | Explainable AI</p>
+<p style='text-align:center;'>Smart Healthcare Platform | Explainable AI</p>
 <hr>
 """, unsafe_allow_html=True)
 
@@ -108,7 +134,7 @@ model = tf.keras.models.load_model(MODEL_PATH, compile=False)
 st.success("✅ Model Loaded")
 
 # -----------------------------
-# GRAD-CAM FUNCTION (FINAL FIX)
+# GRAD-CAM
 # -----------------------------
 def get_gradcam_heatmap(model, img_array, layer_name):
     grad_model = tf.keras.models.Model(
@@ -163,14 +189,14 @@ def generate_report(name, age, disease, confidence):
     return file
 
 # -----------------------------
-# UPLOAD UI
+# UPLOAD
 # -----------------------------
 st.markdown("## 📤 Upload Chest X-ray")
 
 col1, col2 = st.columns(2)
 
 with col1:
-    uploaded_file = st.file_uploader("Upload X-ray Image", type=["jpg","png","jpeg"])
+    uploaded_file = st.file_uploader("Upload Image", type=["jpg","png","jpeg"])
 
 with col2:
     if uploaded_file:
@@ -191,7 +217,6 @@ if uploaded_file:
     pred = CLASS_NAMES[np.argmax(preds)]
     conf = np.max(preds)*100
 
-    # RESULT CARD
     st.markdown(f"""
     <div class="card">
     <h3>🧠 Prediction: {pred}</h3>
@@ -203,27 +228,22 @@ if uploaded_file:
     st.progress(int(conf))
     st.info(DISEASE_INFO.get(pred))
 
-    # -----------------------------
     # GRAD-CAM
-    # -----------------------------
     st.markdown("## 🧠 AI Explanation (Grad-CAM)")
 
     try:
         layer_name = "conv5_block16_concat"
-
         heatmap = get_gradcam_heatmap(model, img_array, layer_name)
         gradcam = overlay_heatmap(np.array(img_resized), heatmap)
 
         c1, c2 = st.columns(2)
-        c1.image(img_resized, caption="Original X-ray")
-        c2.image(gradcam, caption="AI Focus Area")
+        c1.image(img_resized, caption="Original")
+        c2.image(gradcam, caption="AI Focus")
 
     except Exception as e:
-        st.error(f"Grad-CAM Error: {e}")
+        st.error(e)
 
-    # -----------------------------
     # HOSPITALS
-    # -----------------------------
     st.markdown("## 🏥 Recommended Hospitals")
     city = st.text_input("Enter City")
 
@@ -231,20 +251,14 @@ if uploaded_file:
         for h in FALLBACK_HOSPITALS.get(city.title(), []):
             st.markdown(f"<div class='card'>🏥 {h}</div>", unsafe_allow_html=True)
 
-    # -----------------------------
-    # DOWNLOAD REPORT
-    # -----------------------------
+    # DOWNLOAD
     if patient_name and patient_age:
         file = generate_report(patient_name, patient_age, pred, conf)
         with open(file,"rb") as f:
-            st.download_button("📄 Download Medical Report", f)
+            st.download_button("📄 Download Report", f)
 
 # -----------------------------
 # FOOTER
 # -----------------------------
-st.markdown("""
-<hr>
-<p style='text-align:center; color:gray;'>
-Developed by Krish | AI Healthcare System 🚀
-</p>
-""", unsafe_allow_html=True)
+st.markdown("---")
+st.markdown("<p style='text-align:center;'>AI Healthcare System 🚀</p>", unsafe_allow_html=True)
