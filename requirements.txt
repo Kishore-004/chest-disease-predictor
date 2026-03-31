@@ -2,3 +2,7 @@ streamlit
 numpy
 pillow
 matplotlib
+opencv-python-headless
+reportlab
+tensorflow-cpu
+protobuf<4
