@@ -2,7 +2,7 @@ import streamlit as st
 import tensorflow as tf
 import numpy as np
 from PIL import Image
-import gdown, os, cv2, time
+import gdown, os, cv2
 import matplotlib.pyplot as plt
 
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Image as RLImage
@@ -22,10 +22,7 @@ CLASS_NAMES = ['COVID19','NORMAL','PNEUMONIA','TURBERCULOSIS']
 # -----------------------------
 # HEADER
 # -----------------------------
-st.markdown("""
-<h1 style='text-align:center;font-size:50px;'>🩺 AI Healthcare System</h1>
-<hr>
-""", unsafe_allow_html=True)
+st.markdown("<h1 style='text-align:center;'>🩺 AI Healthcare System</h1>", unsafe_allow_html=True)
 
 # -----------------------------
 # LOAD MODEL
@@ -43,42 +40,47 @@ name = st.sidebar.text_input("Name")
 age = st.sidebar.number_input("Age",0,120)
 
 symptoms = st.sidebar.multiselect(
-    "Select Symptoms",
+    "Symptoms",
     ["Fever","Cough","Chest Pain","Breathing Difficulty","Fatigue"]
 )
 
 # -----------------------------
-# UPLOAD
-# -----------------------------
-file = st.file_uploader("Upload X-ray")
-
-# -----------------------------
-# GRAD CAM
+# GRAD-CAM (FINAL FIXED)
 # -----------------------------
 def gradcam(img_array):
-    layer="conv5_block16_concat"
-    grad_model=tf.keras.models.Model(
-        [model.inputs],[model.get_layer(layer).output,model.output]
+    last_layer = "conv5_block16_concat"
+
+    grad_model = tf.keras.models.Model(
+        inputs=model.inputs,
+        outputs=[model.get_layer(last_layer).output, model.output]
     )
 
     with tf.GradientTape() as tape:
-        conv,preds=grad_model(img_array)
-        loss=preds[:,np.argmax(preds[0])]
+        conv_outputs, predictions = grad_model(img_array)
 
-    grads=tape.gradient(loss,conv)
-    pooled=tf.reduce_mean(grads,axis=(0,1,2))
-    conv=conv[0]
+        if isinstance(predictions, list):
+            predictions = predictions[0]
 
-    heat=conv*pooled
-    heat=tf.reduce_sum(heat,axis=-1)
+        class_idx = tf.argmax(predictions[0])
+        loss = predictions[:, class_idx]
 
-    heat=np.maximum(heat,0)/np.max(heat)
-    return heat
+    grads = tape.gradient(loss, conv_outputs)
+
+    pooled_grads = tf.reduce_mean(grads, axis=(0,1,2))
+    conv_outputs = conv_outputs[0]
+
+    heatmap = conv_outputs * pooled_grads
+    heatmap = tf.reduce_sum(heatmap, axis=-1)
+
+    heatmap = np.maximum(heatmap, 0)
+    heatmap = heatmap / (np.max(heatmap) + 1e-8)
+
+    return heatmap
 
 # -----------------------------
 # PDF FUNCTION
 # -----------------------------
-def generate_pdf(name,age,disease,conf,grad_path):
+def generate_pdf(name, age, disease, conf, grad_path):
     file="/tmp/report.pdf"
     doc=SimpleDocTemplate(file,pagesize=A4)
     styles=getSampleStyleSheet()
@@ -94,66 +96,67 @@ def generate_pdf(name,age,disease,conf,grad_path):
     elements.append(Paragraph(f"Confidence: {conf:.2f}%",styles["Normal"]))
 
     elements.append(Spacer(1,20))
-
     elements.append(RLImage(grad_path,width=4*inch,height=4*inch))
 
     doc.build(elements)
     return file
 
 # -----------------------------
-# PREDICTION
+# UPLOAD
 # -----------------------------
+file = st.file_uploader("Upload X-ray")
+
 if file:
-    img=Image.open(file).convert("RGB")
+    img = Image.open(file).convert("RGB")
     st.image(img)
 
-    img_r=img.resize((224,224))
-    arr=np.expand_dims(np.array(img_r)/255,axis=0)
+    img_resized = img.resize((224,224))
+    arr = np.expand_dims(np.array(img_resized)/255,axis=0)
 
-    pred=model.predict(arr)
-    disease=CLASS_NAMES[np.argmax(pred)]
-    conf=np.max(pred)*100
+    preds = model.predict(arr)
+    disease = CLASS_NAMES[np.argmax(preds)]
+    conf = np.max(preds)*100
 
     st.success(f"{disease} ({conf:.2f}%)")
 
     # -----------------------------
-    # CHART (ANALYTICS)
+    # CHART
     # -----------------------------
-    fig=plt.figure()
-    plt.bar(CLASS_NAMES,pred[0])
+    fig = plt.figure()
+    plt.bar(CLASS_NAMES, preds[0])
+    plt.title("Prediction Confidence")
     st.pyplot(fig)
 
     # -----------------------------
-    # GRADCAM
+    # GRAD-CAM
     # -----------------------------
-    heat=gradcam(arr)
-    heat=cv2.resize(heat,(224,224))
-    heat=np.uint8(255*heat)
-    heat=cv2.applyColorMap(heat,cv2.COLORMAP_JET)
+    heat = gradcam(arr)
+    heat = heat.numpy() if hasattr(heat, "numpy") else heat
 
-    grad_img=np.array(img_r)
-    grad_img=heat*0.4+grad_img
+    heat = cv2.resize(heat,(224,224))
+    heat = np.uint8(255*heat)
+    heat = cv2.applyColorMap(heat, cv2.COLORMAP_JET)
 
-    st.image(grad_img,caption="Grad-CAM")
+    grad_img = heat*0.4 + np.array(img_resized)
+    grad_img = np.uint8(grad_img)
 
-    # save
+    st.image(grad_img, caption="Grad-CAM")
+
     grad_path="/tmp/grad.jpg"
-    cv2.imwrite(grad_path,grad_img)
+    cv2.imwrite(grad_path, grad_img)
 
     # -----------------------------
-    # MAP (HOSPITAL LINKS)
+    # MAP
     # -----------------------------
-    city=st.text_input("Enter City")
-
+    city = st.text_input("Enter City")
     if city:
-        st.write("Hospitals:")
-        st.markdown(f"[Search Hospitals](https://www.google.com/maps/search/hospital+in+{city})")
+        st.markdown(f"[Search Hospitals in {city}](https://www.google.com/maps/search/hospital+in+{city})")
 
     # -----------------------------
-    # DOWNLOAD PDF
+    # PDF DOWNLOAD
     # -----------------------------
     if name:
-        pdf=generate_pdf(name,age,disease,conf,grad_path)
+        pdf = generate_pdf(name, age, disease, conf, grad_path)
 
         with open(pdf,"rb") as f:
-            st.download_button("Download Report",f)
+            st.download_button("Download Report", f)
