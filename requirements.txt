@@ -3,6 +3,8 @@ tensorflow
 numpy
 pillow
 gdown
-reportlab
 opencv-python-headless
 matplotlib
+reportlab
+supabase==2.4.0
+protobuf<4
