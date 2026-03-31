@@ -5,6 +5,8 @@ from PIL import Image
 import gdown
 import os
 import time
+import cv2
+import matplotlib.pyplot as plt
 
 # PDF Imports
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer
@@ -42,13 +44,13 @@ DISEASE_INFO = {
     "COVID19": "COVID-19 is a viral respiratory infection affecting the lungs.",
     "PNEUMONIA": "Pneumonia is a lung infection causing inflammation in air sacs.",
     "TURBERCULOSIS": "Tuberculosis is a bacterial infection affecting lungs.",
-    "NORMAL": "No major abnormalities detected. Consult doctor if symptoms persist."
+    "NORMAL": "No major abnormalities detected."
 }
 
 FALLBACK_HOSPITALS = {
-    "Chennai": ["Apollo Hospitals", "MIOT International", "Fortis Malar Hospital"],
-    "Madurai": ["Meenakshi Mission Hospital", "Government Rajaji Hospital"],
-    "Trichy": ["Kauvery Hospital", "Government Hospital Trichy"]
+    "Chennai": ["Apollo Hospitals", "MIOT International"],
+    "Madurai": ["Meenakshi Mission Hospital"],
+    "Trichy": ["Kauvery Hospital"]
 }
 
 # -----------------------------
@@ -58,12 +60,12 @@ st.markdown("""
 <h1 style='text-align: center; color: #2E86C1;'>
 🩺 AI Chest Disease Detection System
 </h1>
-<p style='text-align: center;'>Early Diagnosis | Smart Healthcare</p>
+<p style='text-align: center;'>Early Diagnosis | Explainable AI</p>
 <hr>
 """, unsafe_allow_html=True)
 
 # -----------------------------
-# SIDEBAR (PATIENT DETAILS)
+# SIDEBAR
 # -----------------------------
 st.sidebar.header("👤 Patient Details")
 patient_name = st.sidebar.text_input("Patient Name")
@@ -76,31 +78,56 @@ if not os.path.exists(MODEL_PATH):
     st.info("📥 Downloading model...")
     gdown.download(f"https://drive.google.com/uc?id={FILE_ID}", MODEL_PATH, quiet=False)
 
-# -----------------------------
-# LOAD MODEL
-# -----------------------------
 model = tf.keras.models.load_model(MODEL_PATH, compile=False)
 st.success("✅ Model loaded successfully!")
 
 # -----------------------------
-# PDF GENERATION
+# GRAD-CAM FUNCTION
 # -----------------------------
-def generate_report(name, age, disease, confidence, specialist, description):
-    file_path = "/tmp/AI_Medical_Report.pdf"
-    doc = SimpleDocTemplate(file_path, pagesize=A4)
-    elements = []
-    styles = getSampleStyleSheet()
+def get_gradcam_heatmap(model, img_array, last_conv_layer_name):
+    grad_model = tf.keras.models.Model(
+        [model.inputs],
+        [model.get_layer(last_conv_layer_name).output, model.output]
+    )
 
-    elements.append(Paragraph("<b>AI Medical Report</b>", styles["Title"]))
-    elements.append(Spacer(1, 0.3 * inch))
+    with tf.GradientTape() as tape:
+        conv_outputs, predictions = grad_model(img_array)
+        class_idx = tf.argmax(predictions[0])
+        loss = predictions[:, class_idx]
+
+    grads = tape.gradient(loss, conv_outputs)
+    pooled_grads = tf.reduce_mean(grads, axis=(0, 1, 2))
+
+    conv_outputs = conv_outputs[0]
+    heatmap = conv_outputs @ pooled_grads[..., tf.newaxis]
+    heatmap = tf.squeeze(heatmap)
+
+    heatmap = np.maximum(heatmap, 0) / tf.reduce_max(heatmap)
+    return heatmap.numpy()
+
+def overlay_heatmap(img, heatmap):
+    heatmap = cv2.resize(heatmap, (img.shape[1], img.shape[0]))
+    heatmap = np.uint8(255 * heatmap)
+
+    heatmap = cv2.applyColorMap(heatmap, cv2.COLORMAP_JET)
+    superimposed_img = heatmap * 0.4 + img
+
+    return np.uint8(superimposed_img)
+
+# -----------------------------
+# PDF
+# -----------------------------
+def generate_report(name, age, disease, confidence):
+    file_path = "/tmp/report.pdf"
+    doc = SimpleDocTemplate(file_path, pagesize=A4)
+    styles = getSampleStyleSheet()
+    elements = []
 
     text = f"""
-    Patient Name: {name}<br/>
+    Patient: {name}<br/>
     Age: {age}<br/><br/>
-    Predicted Disease: {disease}<br/>
+    Disease: {disease}<br/>
     Confidence: {confidence:.2f}%<br/>
-    Specialist: {specialist}<br/><br/>
-    {description}
     """
 
     elements.append(Paragraph(text, styles["Normal"]))
@@ -109,104 +136,69 @@ def generate_report(name, age, disease, confidence, specialist, description):
     return file_path
 
 # -----------------------------
-# UPLOAD SECTION
+# UI
 # -----------------------------
 st.subheader("📤 Upload Chest X-ray")
 
 col1, col2 = st.columns(2)
 
 with col1:
-    uploaded_file = st.file_uploader("Upload Image", type=["jpg", "jpeg", "png"])
+    uploaded_file = st.file_uploader("Upload Image", type=["jpg","png","jpeg"])
 
 with col2:
     if uploaded_file:
-        st.image(uploaded_file, caption="X-ray Preview", use_container_width=True)
+        img = Image.open(uploaded_file).convert("RGB")
+        st.image(img, use_container_width=True)
 
 # -----------------------------
 # PREDICTION
 # -----------------------------
 if uploaded_file:
     img = Image.open(uploaded_file).convert("RGB")
-    img = img.resize((224, 224))
-    img_array = np.expand_dims(np.array(img) / 255.0, axis=0)
+    img_resized = img.resize((224,224))
+    img_array = np.expand_dims(np.array(img_resized)/255.0, axis=0)
 
-    with st.spinner("🔍 Analyzing X-ray..."):
+    with st.spinner("🔍 Analyzing..."):
         time.sleep(2)
-        prediction = model.predict(img_array)
+        preds = model.predict(img_array)
 
-    predicted_class = CLASS_NAMES[np.argmax(prediction)]
-    confidence = np.max(prediction) * 100
+    predicted_class = CLASS_NAMES[np.argmax(preds)]
+    confidence = np.max(preds)*100
 
-    specialist = DISEASE_SPECIALIST.get(predicted_class)
-    description = DISEASE_INFO.get(predicted_class)
-
-    # -----------------------------
-    # RESULT CARD
-    # -----------------------------
     st.markdown(f"""
-    <div style="padding:20px;
-                border-radius:10px;
-                background-color:#EAF2F8;
-                border-left:6px solid #2E86C1;">
-    <h3>🧠 Prediction: {predicted_class}</h3>
-    <p>👨‍⚕ Specialist: {specialist}</p>
-    <p>🎯 Confidence: {confidence:.2f}%</p>
+    <div style="padding:20px;background:#EAF2F8;border-left:6px solid #2E86C1">
+    <h3>Prediction: {predicted_class}</h3>
+    <p>Confidence: {confidence:.2f}%</p>
     </div>
     """, unsafe_allow_html=True)
 
-    st.subheader("Confidence Level")
     st.progress(int(confidence))
 
-    st.info(f"📖 {description}")
+    # -----------------------------
+    # GRAD-CAM VISUALIZATION
+    # -----------------------------
+    st.subheader("🧠 Model Focus (Grad-CAM)")
+
+    try:
+        last_conv_layer_name = model.layers[-1].name  # may need change
+        heatmap = get_gradcam_heatmap(model, img_array, last_conv_layer_name)
+
+        img_np = np.array(img_resized)
+        gradcam_img = overlay_heatmap(img_np, heatmap)
+
+        col1, col2 = st.columns(2)
+        with col1:
+            st.image(img_resized, caption="Original")
+        with col2:
+            st.image(gradcam_img, caption="Grad-CAM")
+
+    except Exception as e:
+        st.warning("Grad-CAM not working. Check last conv layer name.")
 
     # -----------------------------
-    # HOSPITAL SECTION
-    # -----------------------------
-    user_city = st.text_input("🏙 Enter your city")
-
-    if user_city:
-        city = user_city.title()
-        hospitals = FALLBACK_HOSPITALS.get(city, [])
-
-        st.subheader(f"🏥 Hospitals in {city}")
-
-        if hospitals:
-            for hospital in hospitals:
-                map_link = f"https://www.google.com/maps/search/{hospital}+{city}"
-                st.success(f"🏥 {hospital}")
-                st.markdown(f"[📍 View on Map]({map_link})")
-        else:
-            st.warning("No hospital data available.")
-
-    # -----------------------------
-    # DOWNLOAD REPORT
+    # REPORT
     # -----------------------------
     if patient_name and patient_age:
-        report_file = generate_report(
-            patient_name,
-            patient_age,
-            predicted_class,
-            confidence,
-            specialist,
-            description
-        )
-
-        with open(report_file, "rb") as f:
-            st.download_button(
-                "📄 Download Full Medical Report",
-                f,
-                file_name="AI_Medical_Report.pdf",
-                mime="application/pdf"
-            )
-
-# -----------------------------
-# FOOTER
-# -----------------------------
-st.markdown("""
-<hr>
-<p style='text-align:center'>
-Developed by Krish | AI Healthcare System 🚀
-</p>
-""", unsafe_allow_html=True)
-
-
+        file = generate_report(patient_name, patient_age, predicted_class, confidence)
+        with open(file,"rb") as f:
+            st.download_button("📄 Download Report", f)
