@@ -8,18 +8,14 @@ import time
 import cv2
 
 # PDF Imports
-from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer
+from reportlab.platypus import SimpleDocTemplate, Paragraph
 from reportlab.lib.styles import getSampleStyleSheet
 from reportlab.lib.pagesizes import A4
 
 # -----------------------------
 # PAGE CONFIG
 # -----------------------------
-st.set_page_config(
-    page_title="AI Medical System",
-    page_icon="🩺",
-    layout="wide"
-)
+st.set_page_config(page_title="AI Medical System", layout="wide")
 
 # -----------------------------
 # CONFIG
@@ -55,22 +51,20 @@ FALLBACK_HOSPITALS = {
 # HEADER
 # -----------------------------
 st.markdown("""
-<h1 style='text-align: center; color: #2E86C1;'>
-🩺 AI Chest Disease Detection System
-</h1>
-<p style='text-align: center;'>Explainable AI</p>
+<h1 style='text-align: center; color: #2E86C1;'>🩺 AI Chest Disease Detection</h1>
+<p style='text-align: center;'>Explainable AI System</p>
 <hr>
 """, unsafe_allow_html=True)
 
 # -----------------------------
 # SIDEBAR
 # -----------------------------
-st.sidebar.header("👤 Patient Details")
+st.sidebar.header("Patient Details")
 patient_name = st.sidebar.text_input("Name")
 patient_age = st.sidebar.number_input("Age", 0, 120)
 
 # -----------------------------
-# MODEL LOAD
+# LOAD MODEL
 # -----------------------------
 if not os.path.exists(MODEL_PATH):
     st.info("Downloading model...")
@@ -80,7 +74,7 @@ model = tf.keras.models.load_model(MODEL_PATH, compile=False)
 st.success("Model Loaded")
 
 # -----------------------------
-# FIXED GRAD-CAM
+# GRAD-CAM FIXED
 # -----------------------------
 def get_gradcam_heatmap(model, img_array, layer_name):
     grad_model = tf.keras.models.Model(
@@ -90,6 +84,11 @@ def get_gradcam_heatmap(model, img_array, layer_name):
 
     with tf.GradientTape() as tape:
         conv_outputs, predictions = grad_model(img_array)
+
+        # FIX for list/tensor issue
+        if isinstance(predictions, list):
+            predictions = predictions[0]
+
         class_idx = tf.argmax(predictions[0])
         loss = predictions[:, class_idx]
 
@@ -107,7 +106,7 @@ def get_gradcam_heatmap(model, img_array, layer_name):
     return heatmap
 
 def overlay_heatmap(img, heatmap):
-    heatmap = cv2.resize(heatmap.numpy(), (img.shape[1], img.shape[0]))
+    heatmap = cv2.resize(heatmap, (img.shape[1], img.shape[0]))
     heatmap = np.uint8(255 * heatmap)
     heatmap = cv2.applyColorMap(heatmap, cv2.COLORMAP_JET)
     return np.uint8(heatmap * 0.4 + img)
@@ -119,7 +118,6 @@ def generate_report(name, age, disease, confidence):
     file = "/tmp/report.pdf"
     doc = SimpleDocTemplate(file, pagesize=A4)
     styles = getSampleStyleSheet()
-    elements = []
 
     text = f"""
     Patient: {name}<br/>
@@ -128,8 +126,7 @@ def generate_report(name, age, disease, confidence):
     Confidence: {confidence:.2f}%
     """
 
-    elements.append(Paragraph(text, styles["Normal"]))
-    doc.build(elements)
+    doc.build([Paragraph(text, styles["Normal"])])
     return file
 
 # -----------------------------
@@ -169,34 +166,33 @@ if uploaded_file:
     """, unsafe_allow_html=True)
 
     st.progress(int(conf))
+    st.info(DISEASE_INFO.get(pred))
 
     # -----------------------------
-    # GRAD-CAM (FINAL FIX)
+    # GRAD-CAM FINAL
     # -----------------------------
     st.subheader("Grad-CAM")
 
     try:
-        layer = "conv5_block16_concat"
-        heatmap = get_gradcam_heatmap(model, img_array, layer)
+        layer_name = "conv5_block16_concat"
 
-        img_np = np.array(img_resized)
-        gradcam = overlay_heatmap(img_np, heatmap)
+        heatmap = get_gradcam_heatmap(model, img_array, layer_name)
+        gradcam = overlay_heatmap(np.array(img_resized), heatmap)
 
         c1, c2 = st.columns(2)
         c1.image(img_resized, caption="Original")
         c2.image(gradcam, caption="Grad-CAM")
 
     except Exception as e:
-        st.error(e)
+        st.error(f"Grad-CAM Error: {e}")
 
     # -----------------------------
-    # HOSPITAL
+    # HOSPITALS
     # -----------------------------
     city = st.text_input("Enter City")
 
     if city:
-        hospitals = FALLBACK_HOSPITALS.get(city.title(), [])
-        for h in hospitals:
+        for h in FALLBACK_HOSPITALS.get(city.title(), []):
             st.success(h)
 
     # -----------------------------
