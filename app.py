@@ -11,22 +11,59 @@ from reportlab.lib.pagesizes import A4
 from reportlab.lib.units import inch
 
 # -----------------------------
-# CONFIG
+# PAGE CONFIG
 # -----------------------------
 st.set_page_config(page_title="AI Healthcare", layout="wide")
 
-MODEL_PATH = "final_chest_disease_model.keras"
-FILE_ID = "1GRO5EwB9PDX61G1lZfIHChvCK7JkYe6v"
-CLASS_NAMES = ['COVID19','NORMAL','PNEUMONIA','TURBERCULOSIS']
+# -----------------------------
+# BIG FONT CSS (FORCE)
+# -----------------------------
+st.markdown("""
+<style>
+html, body, [class*="css"] {
+    font-size: 24px !important;
+    font-weight: bold !important;
+}
+
+section[data-testid="stSidebar"] * {
+    font-size: 22px !important;
+    font-weight: bold !important;
+}
+
+input, textarea {
+    font-size: 22px !important;
+    font-weight: bold !important;
+}
+
+button {
+    font-size: 22px !important;
+    font-weight: bold !important;
+}
+
+h1 { font-size: 70px !important; }
+h2 { font-size: 45px !important; }
+h3 { font-size: 35px !important; }
+
+p { font-size: 24px !important; font-weight: bold !important; }
+</style>
+""", unsafe_allow_html=True)
 
 # -----------------------------
 # HEADER
 # -----------------------------
-st.markdown("<h1 style='text-align:center;'>🩺 AI Healthcare System</h1>", unsafe_allow_html=True)
+st.markdown("""
+<h1 style='text-align:center;'>🩺 AI Healthcare System</h1>
+<p style='text-align:center;'>Chest Disease Detection Platform</p>
+<hr>
+""", unsafe_allow_html=True)
 
 # -----------------------------
-# DATA
+# CONFIG
 # -----------------------------
+MODEL_PATH = "final_chest_disease_model.keras"
+FILE_ID = "1GRO5EwB9PDX61G1lZfIHChvCK7JkYe6v"
+CLASS_NAMES = ['COVID19','NORMAL','PNEUMONIA','TURBERCULOSIS']
+
 DISEASE_INFO = {
     "COVID19": "COVID-19 is a viral infection affecting lungs causing fever, cough and breathing issues.",
     "PNEUMONIA": "Pneumonia is a lung infection causing inflammation and breathing difficulty.",
@@ -58,6 +95,7 @@ model = tf.keras.models.load_model(MODEL_PATH, compile=False)
 # -----------------------------
 # SIDEBAR
 # -----------------------------
+st.sidebar.header("Patient Details")
 name = st.sidebar.text_input("Name")
 age = st.sidebar.number_input("Age",0,120)
 
@@ -99,7 +137,7 @@ def gradcam(img_array):
     return heatmap
 
 # -----------------------------
-# PDF FUNCTION (FINAL)
+# PDF FUNCTION
 # -----------------------------
 def generate_pdf(name, age, disease, conf, symptoms, hospitals, specialist, description, grad_path, graph_path):
     file = f"/tmp/report_{uuid.uuid4().hex}.pdf"
@@ -138,14 +176,12 @@ def generate_pdf(name, age, disease, conf, symptoms, hospitals, specialist, desc
 
     if os.path.exists(grad_path):
         elements.append(Paragraph("Grad-CAM Visualization:", styles["Heading2"]))
-        elements.append(Spacer(1, 10))
         elements.append(RLImage(grad_path, width=4*inch, height=4*inch))
 
     elements.append(Spacer(1, 15))
 
     if os.path.exists(graph_path):
         elements.append(Paragraph("Prediction Graph:", styles["Heading2"]))
-        elements.append(Spacer(1, 10))
         elements.append(RLImage(graph_path, width=4*inch, height=3*inch))
 
     doc.build(elements)
@@ -154,10 +190,10 @@ def generate_pdf(name, age, disease, conf, symptoms, hospitals, specialist, desc
 # -----------------------------
 # UPLOAD
 # -----------------------------
-file = st.file_uploader("Upload X-ray")
+uploaded_file = st.file_uploader("Upload X-ray")
 
-if file:
-    img = Image.open(file).convert("RGB")
+if uploaded_file:
+    img = Image.open(uploaded_file).convert("RGB")
 
     img_resized = img.resize((224,224))
     arr = np.expand_dims(np.array(img_resized)/255, axis=0)
@@ -213,7 +249,6 @@ if file:
             graph_path
         )
 
-        # 🔥 FIXED DOWNLOAD
         with open(pdf, "rb") as f:
             pdf_bytes = f.read()
 
