@@ -2,7 +2,7 @@ import streamlit as st
 import tensorflow as tf
 import numpy as np
 from PIL import Image
-import os, cv2, uuid
+import gdown, os, cv2, uuid
 import matplotlib.pyplot as plt
 
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Image as RLImage
@@ -14,85 +14,132 @@ from reportlab.lib.units import inch
 # PAGE CONFIG
 # -----------------------------
 st.set_page_config(page_title="AI Healthcare", layout="wide")
-st.title("🩺 AI Healthcare System")
 
 # -----------------------------
-# MODEL LOAD (SAFE)
+# BIG FONT CSS (FORCE)
 # -----------------------------
-MODEL_PATH = "model.keras"
-CLASS_NAMES = ['COVID19','NORMAL','PNEUMONIA','TUBERCULOSIS']
+st.markdown("""
+<style>
+html, body, [class*="css"] {
+    font-size: 24px !important;
+    font-weight: bold !important;
+}
 
-@st.cache_resource
-def load_model():
-    try:
-        if not os.path.exists(MODEL_PATH):
-            st.error("❌ model.keras not found in folder")
-            return None
+section[data-testid="stSidebar"] * {
+    font-size: 22px !important;
+    font-weight: bold !important;
+}
 
-        model = tf.keras.models.load_model(MODEL_PATH, compile=False)
-        return model
+input, textarea {
+    font-size: 22px !important;
+    font-weight: bold !important;
+}
 
-    except Exception as e:
-        st.error(f"❌ Model load error: {e}")
-        return None
+button {
+    font-size: 22px !important;
+    font-weight: bold !important;
+}
 
-model = load_model()
+h1 { font-size: 70px !important; }
+h2 { font-size: 45px !important; }
+h3 { font-size: 35px !important; }
 
-if model is None:
-    st.stop()
-else:
-    st.success("✅ Model loaded")
+p { font-size: 24px !important; font-weight: bold !important; }
+</style>
+""", unsafe_allow_html=True)
 
 # -----------------------------
-# USER INPUT
+# HEADER
 # -----------------------------
-name = st.sidebar.text_input("Patient Name")
-age = st.sidebar.number_input("Age", 0, 120)
+st.markdown("""
+<h1 style='text-align:center;'>🩺 AI Healthcare System</h1>
+<p style='text-align:center;'>Chest Disease Detection Platform</p>
+<hr>
+""", unsafe_allow_html=True)
 
 # -----------------------------
-# GRAD-CAM (AUTO SAFE)
+# CONFIG
+# -----------------------------
+MODEL_PATH = "final_chest_disease_model.keras"
+FILE_ID = "1GRO5EwB9PDX61G1lZfIHChvCK7JkYe6v"
+CLASS_NAMES = ['COVID19','NORMAL','PNEUMONIA','TURBERCULOSIS']
+
+DISEASE_INFO = {
+    "COVID19": "COVID-19 is a viral infection affecting lungs causing fever, cough and breathing issues.",
+    "PNEUMONIA": "Pneumonia is a lung infection causing inflammation and breathing difficulty.",
+    "TURBERCULOSIS": "Tuberculosis is a bacterial lung infection requiring long treatment.",
+    "NORMAL": "No abnormalities detected."
+}
+
+DISEASE_SPECIALIST = {
+    "COVID19": "Pulmonologist",
+    "PNEUMONIA": "Pulmonologist",
+    "TURBERCULOSIS": "Chest Specialist",
+    "NORMAL": "General Physician"
+}
+
+FALLBACK_HOSPITALS = {
+    "Chennai": ["Apollo Hospitals", "MIOT International", "Fortis Malar"],
+    "Madurai": ["Meenakshi Mission Hospital"],
+    "Trichy": ["Kauvery Hospital"]
+}
+
+# -----------------------------
+# LOAD MODEL
+# -----------------------------
+if not os.path.exists(MODEL_PATH):
+    gdown.download(f"https://drive.google.com/uc?id={FILE_ID}", MODEL_PATH)
+
+model = tf.keras.models.load_model(MODEL_PATH, compile=False)
+
+# -----------------------------
+# SIDEBAR
+# -----------------------------
+st.sidebar.header("Patient Details")
+name = st.sidebar.text_input("Name")
+age = st.sidebar.number_input("Age",0,120)
+
+symptoms = st.sidebar.multiselect(
+    "Symptoms",
+    ["Fever","Cough","Chest Pain","Breathing Difficulty","Fatigue"]
+)
+
+# -----------------------------
+# GRAD-CAM
 # -----------------------------
 def gradcam(img_array):
-    try:
-        last_conv_layer = None
-        for layer in reversed(model.layers):
-            if "conv" in layer.name:
-                last_conv_layer = layer.name
-                break
+    layer = "conv5_block16_concat"
 
-        if last_conv_layer is None:
-            return None
+    grad_model = tf.keras.models.Model(
+        inputs=model.inputs,
+        outputs=[model.get_layer(layer).output, model.output]
+    )
 
-        grad_model = tf.keras.models.Model(
-            inputs=model.inputs,
-            outputs=[model.get_layer(last_conv_layer).output, model.output]
-        )
+    with tf.GradientTape() as tape:
+        conv_outputs, predictions = grad_model(img_array)
 
-        with tf.GradientTape() as tape:
-            conv_outputs, predictions = grad_model(img_array)
-            class_idx = tf.argmax(predictions[0])
-            loss = predictions[:, class_idx]
+        if isinstance(predictions, list):
+            predictions = predictions[0]
 
-        grads = tape.gradient(loss, conv_outputs)
-        pooled_grads = tf.reduce_mean(grads, axis=(0,1,2))
+        class_idx = tf.argmax(predictions[0])
+        loss = predictions[:, class_idx]
 
-        conv_outputs = conv_outputs[0]
-        heatmap = conv_outputs * pooled_grads
-        heatmap = tf.reduce_sum(heatmap, axis=-1)
+    grads = tape.gradient(loss, conv_outputs)
+    pooled_grads = tf.reduce_mean(grads, axis=(0,1,2))
 
-        heatmap = np.maximum(heatmap, 0)
-        heatmap /= (np.max(heatmap) + 1e-8)
+    conv_outputs = conv_outputs[0]
+    heatmap = conv_outputs * pooled_grads
+    heatmap = tf.reduce_sum(heatmap, axis=-1)
 
-        return heatmap
+    heatmap = np.maximum(heatmap, 0)
+    heatmap = heatmap / (np.max(heatmap) + 1e-8)
 
-    except Exception as e:
-        st.warning(f"Grad-CAM skipped: {e}")
-        return None
+    return heatmap
 
 # -----------------------------
-# PDF GENERATION
+# PDF FUNCTION
 # -----------------------------
-def generate_pdf(name, age, disease, conf, grad_path):
+def generate_pdf(name, age, disease, conf, symptoms, hospitals, specialist, description, grad_path, graph_path):
     file = f"/tmp/report_{uuid.uuid4().hex}.pdf"
 
     doc = SimpleDocTemplate(file, pagesize=A4)
@@ -100,85 +147,114 @@ def generate_pdf(name, age, disease, conf, grad_path):
 
     elements = []
 
-    elements.append(Paragraph("AI Medical Report", styles["Title"]))
-    elements.append(Spacer(1,20))
+    elements.append(Paragraph("AI MEDICAL REPORT", styles["Title"]))
+    elements.append(Spacer(1, 20))
 
     elements.append(Paragraph(f"Name: {name}", styles["Normal"]))
     elements.append(Paragraph(f"Age: {age}", styles["Normal"]))
+    elements.append(Spacer(1, 10))
+
+    elements.append(Paragraph("Symptoms:", styles["Heading2"]))
+    elements.append(Paragraph(", ".join(symptoms) if symptoms else "None", styles["Normal"]))
+    elements.append(Spacer(1, 10))
+
+    elements.append(Paragraph("Diagnosis:", styles["Heading2"]))
     elements.append(Paragraph(f"Disease: {disease}", styles["Normal"]))
     elements.append(Paragraph(f"Confidence: {conf:.2f}%", styles["Normal"]))
+    elements.append(Paragraph(f"Specialist: {specialist}", styles["Normal"]))
+    elements.append(Spacer(1, 10))
 
-    elements.append(Spacer(1,20))
+    elements.append(Paragraph("Disease Explanation:", styles["Heading2"]))
+    elements.append(Paragraph(description, styles["Normal"]))
+    elements.append(Spacer(1, 10))
 
-    if grad_path and os.path.exists(grad_path):
+    elements.append(Paragraph("Recommended Hospitals:", styles["Heading2"]))
+    for h in hospitals:
+        elements.append(Paragraph(f"{h} ({specialist})", styles["Normal"]))
+
+    elements.append(Spacer(1, 15))
+
+    if os.path.exists(grad_path):
+        elements.append(Paragraph("Grad-CAM Visualization:", styles["Heading2"]))
         elements.append(RLImage(grad_path, width=4*inch, height=4*inch))
+
+    elements.append(Spacer(1, 15))
+
+    if os.path.exists(graph_path):
+        elements.append(Paragraph("Prediction Graph:", styles["Heading2"]))
+        elements.append(RLImage(graph_path, width=4*inch, height=3*inch))
 
     doc.build(elements)
     return file
 
 # -----------------------------
-# FILE UPLOAD
+# UPLOAD
 # -----------------------------
-file = st.file_uploader("Upload Chest X-ray")
+uploaded_file = st.file_uploader("Upload X-ray")
 
-if file:
-    try:
-        img = Image.open(file).convert("RGB")
+if uploaded_file:
+    img = Image.open(uploaded_file).convert("RGB")
 
-        img_resized = img.resize((224,224))
-        arr = np.expand_dims(np.array(img_resized)/255, axis=0)
+    img_resized = img.resize((224,224))
+    arr = np.expand_dims(np.array(img_resized)/255, axis=0)
 
-        preds = model.predict(arr)
+    preds = model.predict(arr)
+    disease = CLASS_NAMES[np.argmax(preds)]
+    conf = np.max(preds)*100
 
-        disease = CLASS_NAMES[np.argmax(preds)]
-        conf = np.max(preds)*100
+    st.success(f"{disease} ({conf:.2f}%)")
 
-        st.success(f"{disease} ({conf:.2f}%)")
+    # IMAGE + GRAPH
+    col1, col2 = st.columns(2)
 
-        col1, col2 = st.columns(2)
+    with col1:
+        st.image(img)
 
-        with col1:
-            st.image(img)
+    with col2:
+        fig, ax = plt.subplots(figsize=(4,3))
+        ax.bar(CLASS_NAMES, preds[0])
+        st.pyplot(fig)
 
-        with col2:
-            fig, ax = plt.subplots()
-            ax.bar(CLASS_NAMES, preds[0])
-            st.pyplot(fig)
+    graph_path = f"/tmp/graph_{uuid.uuid4().hex}.png"
+    fig.savefig(graph_path)
 
-        # -----------------------------
-        # GRAD-CAM
-        # -----------------------------
-        heat = gradcam(arr)
-        grad_path = None
+    # GRAD-CAM
+    heat = gradcam(arr)
+    heat = heat.numpy() if hasattr(heat,"numpy") else heat
 
-        if heat is not None:
-            heat = cv2.resize(heat, (224,224))
-            heat = np.uint8(255*heat)
-            heat = cv2.applyColorMap(heat, cv2.COLORMAP_JET)
+    heat = cv2.resize(heat,(224,224))
+    heat = np.uint8(255*heat)
+    heat = cv2.applyColorMap(heat, cv2.COLORMAP_JET)
 
-            grad_img = heat*0.4 + np.array(img_resized)
-            grad_img = np.uint8(grad_img)
+    grad_img = heat*0.4 + np.array(img_resized)
+    grad_img = np.uint8(grad_img)
 
-            st.image(grad_img)
+    st.image(grad_img)
 
-            grad_path = f"/tmp/grad_{uuid.uuid4().hex}.jpg"
-            cv2.imwrite(grad_path, grad_img)
+    grad_path = f"/tmp/grad_{uuid.uuid4().hex}.jpg"
+    cv2.imwrite(grad_path, grad_img)
 
-        # -----------------------------
-        # PDF DOWNLOAD
-        # -----------------------------
-        if name:
-            pdf = generate_pdf(name, age, disease, conf, grad_path)
+    city = st.text_input("Enter City")
 
-            with open(pdf, "rb") as f:
-                pdf_bytes = f.read()
+    if name:
+        hospitals = FALLBACK_HOSPITALS.get(city.title(), [])
 
-            st.download_button(
-                "📄 Download Report",
-                data=pdf_bytes,
-                file_name="AI_Report.pdf",
-                mime="application/pdf"
-            )
+        pdf = generate_pdf(
+            name, age, disease, conf,
+            symptoms,
+            hospitals,
+            DISEASE_SPECIALIST.get(disease),
+            DISEASE_INFO.get(disease),
+            grad_path,
+            graph_path
+        )
 
-    except Exception as e:
-        st.error(f"❌ Error: {e}")
+        with open(pdf, "rb") as f:
+            pdf_bytes = f.read()
+
+        st.download_button(
+            "📄 Download PDF Report",
+            data=pdf_bytes,
+            file_name="AI_Medical_Report.pdf",
+            mime="application/pdf"
+        )
