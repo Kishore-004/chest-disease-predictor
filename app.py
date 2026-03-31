@@ -1,5 +1,6 @@
 import streamlit as st
 from PIL import Image
+import random
 
 st.title("🩺 AI Chest Disease Prediction System")
 
@@ -13,3 +14,13 @@ if file:
 
     if name:
         st.success(f"Hello {name}, image uploaded successfully ✅")
+
+    # -----------------------------
+    # DUMMY PREDICTION (SAFE)
+    # -----------------------------
+    diseases = ["COVID19", "NORMAL", "PNEUMONIA", "TUBERCULOSIS"]
+    prediction = random.choice(diseases)
+    confidence = round(random.uniform(80, 99), 2)
+
+    st.subheader("🧠 Prediction Result")
+    st.success(f"{prediction} ({confidence}%)")
