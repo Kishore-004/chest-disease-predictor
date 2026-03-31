@@ -99,7 +99,7 @@ def gradcam(img_array):
     return heatmap
 
 # -----------------------------
-# PDF FUNCTION (FINAL FIXED)
+# PDF FUNCTION (FINAL)
 # -----------------------------
 def generate_pdf(name, age, disease, conf, symptoms, hospitals, specialist, description, grad_path, graph_path):
     file = f"/tmp/report_{uuid.uuid4().hex}.pdf"
@@ -109,40 +109,33 @@ def generate_pdf(name, age, disease, conf, symptoms, hospitals, specialist, desc
 
     elements = []
 
-    # Title
     elements.append(Paragraph("AI MEDICAL REPORT", styles["Title"]))
     elements.append(Spacer(1, 20))
 
-    # Patient
     elements.append(Paragraph(f"Name: {name}", styles["Normal"]))
     elements.append(Paragraph(f"Age: {age}", styles["Normal"]))
     elements.append(Spacer(1, 10))
 
-    # Symptoms
     elements.append(Paragraph("Symptoms:", styles["Heading2"]))
     elements.append(Paragraph(", ".join(symptoms) if symptoms else "None", styles["Normal"]))
     elements.append(Spacer(1, 10))
 
-    # Diagnosis
     elements.append(Paragraph("Diagnosis:", styles["Heading2"]))
     elements.append(Paragraph(f"Disease: {disease}", styles["Normal"]))
     elements.append(Paragraph(f"Confidence: {conf:.2f}%", styles["Normal"]))
     elements.append(Paragraph(f"Specialist: {specialist}", styles["Normal"]))
     elements.append(Spacer(1, 10))
 
-    # Explanation
     elements.append(Paragraph("Disease Explanation:", styles["Heading2"]))
     elements.append(Paragraph(description, styles["Normal"]))
     elements.append(Spacer(1, 10))
 
-    # Hospitals
     elements.append(Paragraph("Recommended Hospitals:", styles["Heading2"]))
     for h in hospitals:
         elements.append(Paragraph(f"{h} ({specialist})", styles["Normal"]))
 
     elements.append(Spacer(1, 15))
 
-    # Grad-CAM Image
     if os.path.exists(grad_path):
         elements.append(Paragraph("Grad-CAM Visualization:", styles["Heading2"]))
         elements.append(Spacer(1, 10))
@@ -150,7 +143,6 @@ def generate_pdf(name, age, disease, conf, symptoms, hospitals, specialist, desc
 
     elements.append(Spacer(1, 15))
 
-    # Graph
     if os.path.exists(graph_path):
         elements.append(Paragraph("Prediction Graph:", styles["Heading2"]))
         elements.append(Spacer(1, 10))
@@ -176,7 +168,7 @@ if file:
 
     st.success(f"{disease} ({conf:.2f}%)")
 
-    # Image + Graph
+    # IMAGE + GRAPH
     col1, col2 = st.columns(2)
 
     with col1:
@@ -190,7 +182,7 @@ if file:
     graph_path = f"/tmp/graph_{uuid.uuid4().hex}.png"
     fig.savefig(graph_path)
 
-    # Grad-CAM
+    # GRAD-CAM
     heat = gradcam(arr)
     heat = heat.numpy() if hasattr(heat,"numpy") else heat
 
@@ -221,5 +213,13 @@ if file:
             graph_path
         )
 
+        # 🔥 FIXED DOWNLOAD
         with open(pdf, "rb") as f:
-            st.download_button("Download PDF Report", f)
+            pdf_bytes = f.read()
+
+        st.download_button(
+            "📄 Download PDF Report",
+            data=pdf_bytes,
+            file_name="AI_Medical_Report.pdf",
+            mime="application/pdf"
+        )
