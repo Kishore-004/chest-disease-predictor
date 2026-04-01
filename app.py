@@ -92,7 +92,7 @@ def load_model():
     return interpreter
 
 # -----------------------------
-# LOAD GRADCAM MODEL (SAFE)
+# LOAD GRADCAM MODEL
 # -----------------------------
 @st.cache_resource
 def load_gradcam_model():
@@ -121,7 +121,7 @@ def symptom_score(disease, symptoms):
     return len(match) / (len(SYMPTOM_MAP.get(disease, [])) + 1e-5)
 
 # -----------------------------
-# GRADCAM FUNCTION (FIXED)
+# GRADCAM FUNCTION
 # -----------------------------
 def generate_gradcam(image, model):
     last_conv_layer = None
@@ -143,8 +143,6 @@ def generate_gradcam(image, model):
         conv_outputs, predictions = grad_model(image)
         class_idx = tf.argmax(predictions[0])
         class_idx = tf.cast(class_idx, tf.int32)
-
-        # 🔥 FIXED LINE
         loss = tf.gather(predictions[0], class_idx)
 
     grads = tape.gradient(loss, conv_outputs)
@@ -218,7 +216,7 @@ if uploaded_file:
         st.markdown("</div>", unsafe_allow_html=True)
 
     # -----------------------------
-    # GRADCAM BUTTON
+    # 🔥 IMPROVED GRADCAM
     # -----------------------------
     st.markdown("## 🔍 Explain Prediction")
 
@@ -228,13 +226,19 @@ if uploaded_file:
             heatmap = generate_gradcam(arr, grad_model)
 
             heatmap = cv2.resize(heatmap, (224,224))
+            heatmap = heatmap / (np.max(heatmap) + 1e-8)
+
+            # 🔥 THRESHOLD (KEY FIX)
+            threshold = 0.6
+            heatmap[heatmap < threshold] = 0
+
             heatmap = np.uint8(255 * heatmap)
             heatmap = cv2.applyColorMap(heatmap, cv2.COLORMAP_JET)
 
-            overlay = heatmap * 0.4 + np.array(img_resized)
-            overlay = np.uint8(overlay)
+            # 🔥 STRONG OVERLAY
+            overlay = cv2.addWeighted(np.array(img_resized), 0.6, heatmap, 0.7, 0)
 
-            st.image(overlay, caption="🔥 Affected Lung Region")
+            st.image(overlay, caption="🔥 High Confidence Affected Area")
 
     # -----------------------------
     # HOSPITALS
