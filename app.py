@@ -11,6 +11,45 @@ from reportlab.lib.styles import getSampleStyleSheet
 from reportlab.lib.pagesizes import A4
 
 # -----------------------------
+# PAGE CONFIG
+# -----------------------------
+st.set_page_config(page_title="AI Healthcare", layout="wide")
+
+# -----------------------------
+# CUSTOM UI CSS
+# -----------------------------
+st.markdown("""
+<style>
+.main {
+    background-color: #f5f7fa;
+}
+h1 {
+    text-align: center;
+    color: #2c3e50;
+}
+.card {
+    background-color: white;
+    padding: 20px;
+    border-radius: 15px;
+    box-shadow: 0px 4px 10px rgba(0,0,0,0.1);
+    margin-bottom: 20px;
+}
+.result {
+    font-size: 28px;
+    font-weight: bold;
+    color: #27ae60;
+}
+</style>
+""", unsafe_allow_html=True)
+
+# -----------------------------
+# HEADER
+# -----------------------------
+st.markdown("<h1>🩺 AI Healthcare System</h1>", unsafe_allow_html=True)
+st.markdown("<p style='text-align:center;'>Chest Disease Detection & Hospital Finder</p>", unsafe_allow_html=True)
+st.markdown("---")
+
+# -----------------------------
 # CONFIG
 # -----------------------------
 MODEL_PATH = "model.tflite"
@@ -19,7 +58,7 @@ FILE_ID = "1CBdRBXsze5YgdbRnC8H3GYtqLlydeF-j"
 CLASS_NAMES = ['COVID19','NORMAL','PNEUMONIA','TURBERCULOSIS']
 
 # -----------------------------
-# HOSPITAL DATA (Tamil Nadu)
+# HOSPITAL DATA
 # -----------------------------
 HOSPITALS = {
     "Chennai": ["Apollo Hospital Chennai", "MIOT International", "Fortis Malar Hospital"],
@@ -38,7 +77,8 @@ HOSPITALS = {
 @st.cache_resource
 def load_model():
     if not os.path.exists(MODEL_PATH):
-        gdown.download(f"https://drive.google.com/uc?id={FILE_ID}", MODEL_PATH)
+        with st.spinner("Downloading model... ⏳"):
+            gdown.download(f"https://drive.google.com/uc?id={FILE_ID}", MODEL_PATH)
 
     interpreter = tf.lite.Interpreter(model_path=MODEL_PATH)
     interpreter.allocate_tensors()
@@ -59,23 +99,23 @@ def get_rating():
     return round(random.uniform(3.5, 5.0), 1)
 
 # -----------------------------
-# UI
+# INPUTS
 # -----------------------------
-st.title("🩺 AI Healthcare System")
-st.write("Chest Disease Detection + Hospital Recommendation")
-st.markdown("---")
+name = st.text_input("👤 Enter Name")
+age = st.number_input("🎂 Age", 0, 120)
 
-name = st.text_input("Enter Name")
-age = st.number_input("Age", 0, 120)
+uploaded_file = st.file_uploader("📤 Upload X-ray", type=["jpg","png","jpeg"])
 
-uploaded_file = st.file_uploader("Upload X-ray", type=["jpg","png","jpeg"])
-
+# -----------------------------
+# MAIN LOGIC
+# -----------------------------
 if uploaded_file:
     img = Image.open(uploaded_file).convert("RGB")
     img_resized = img.resize((224,224))
 
     arr = np.expand_dims(np.array(img_resized)/255, axis=0).astype('float32')
 
+    # Prediction
     interpreter.set_tensor(input_details[0]['index'], arr)
     interpreter.invoke()
     preds = interpreter.get_tensor(output_details[0]['index'])
@@ -83,24 +123,39 @@ if uploaded_file:
     disease = CLASS_NAMES[np.argmax(preds)]
     conf = np.max(preds)*100
 
-    st.success(f"Prediction: {disease} ({conf:.2f}%)")
+    # -----------------------------
+    # RESULT CARD
+    # -----------------------------
+    st.markdown(f"""
+    <div class="card">
+        <div class="result">🧠 {disease}</div>
+        <p>Confidence: {conf:.2f}%</p>
+    </div>
+    """, unsafe_allow_html=True)
 
+    # -----------------------------
+    # IMAGE + GRAPH
+    # -----------------------------
     col1, col2 = st.columns(2)
 
     with col1:
+        st.markdown("<div class='card'>", unsafe_allow_html=True)
         st.image(img, caption="Uploaded X-ray")
+        st.markdown("</div>", unsafe_allow_html=True)
 
     with col2:
+        st.markdown("<div class='card'>", unsafe_allow_html=True)
         fig, ax = plt.subplots()
         ax.bar(CLASS_NAMES, preds[0])
         st.pyplot(fig)
+        st.markdown("</div>", unsafe_allow_html=True)
 
     # -----------------------------
     # HOSPITAL SUGGESTION
     # -----------------------------
     st.markdown("## 🏥 Recommended Hospitals")
 
-    city = st.text_input("Enter your city")
+    city = st.text_input("📍 Enter your city")
 
     if city:
         hospitals = HOSPITALS.get(city.title())
@@ -111,16 +166,17 @@ if uploaded_file:
                 link = get_maps_link(h, city)
 
                 st.markdown(f"""
-                **🏥 {h}**  
-                ⭐ Rating: {rating} / 5  
-                📍 [View on Map]({link})
-                ---
-                """)
+                <div class="card">
+                    <h4>🏥 {h}</h4>
+                    <p>⭐ Rating: {rating} / 5</p>
+                    <a href="{link}" target="_blank">📍 View on Google Maps</a>
+                </div>
+                """, unsafe_allow_html=True)
         else:
             st.warning("No hospitals found for this city")
 
     # -----------------------------
-    # PDF
+    # PDF GENERATION
     # -----------------------------
     if name:
         file = f"/tmp/report_{name}.pdf"
@@ -138,4 +194,9 @@ if uploaded_file:
         doc.build(elements)
 
         with open(file, "rb") as f:
-            st.download_button("📄 Download Report", f, file_name="report.pdf")
+            st.download_button(
+                "📄 Download Medical Report",
+                data=f,
+                file_name="report.pdf",
+                use_container_width=True
+            )
