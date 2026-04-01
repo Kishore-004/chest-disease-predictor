@@ -13,7 +13,7 @@ from reportlab.lib.pagesizes import A4
 # ---------------- CONFIG ----------------
 st.set_page_config(page_title="AI Healthcare", layout="wide")
 
-# ✅ TITLE ADDED (ONLY CHANGE)
+# TITLE
 st.markdown("""
 <h1 style='text-align: center; color: #1f77b4;'>
 🩺 AI Powered Chest Disease Prediction and Hospital Suggestion
@@ -27,6 +27,13 @@ KERAS_PATH = "model.keras"
 KERAS_ID = "1GRO5EwB9PDX61G1lZfIHChvCK7JkYe6v"
 
 CLASS_NAMES = ['COVID19','NORMAL','PNEUMONIA','TURBERCULOSIS']
+
+# ---------------- SYMPTOMS LIST ----------------
+SYMPTOMS_LIST = [
+    "Fever", "Dry Cough", "Chronic Cough", "Chest Pain",
+    "Breathing Difficulty", "Shortness of Breath",
+    "Fatigue", "Weight Loss", "Night Sweats"
+]
 
 # ---------------- STYLE ----------------
 st.markdown("""
@@ -133,7 +140,10 @@ st.sidebar.header("Patient Info")
 name = st.sidebar.text_input("Name")
 age = st.sidebar.number_input("Age",0,120)
 gender = st.sidebar.selectbox("Gender", ["Male","Female","Other"])
-symptoms = st.sidebar.text_input("Symptoms").split(",")
+
+# ✅ UPDATED: MULTISELECT SYMPTOMS
+symptoms = st.sidebar.multiselect("Select Symptoms", SYMPTOMS_LIST)
+
 uploaded = st.sidebar.file_uploader("Upload X-ray")
 
 # ---------------- MAIN ----------------
@@ -211,26 +221,9 @@ if uploaded:
 
         st.image(overlay, width=400)
 
-    # -------- HOSPITALS --------
-    city = st.text_input("Enter City")
-
-    if city:
-        city = city.strip().title()
-        if city in HOSPITALS:
-            st.markdown("### 🏥 Hospital Suggestions")
-            for h in HOSPITALS[city]:
-                st.markdown(f"""
-                <div class="card">
-                <b>{h['name']}</b><br>
-                👨‍⚕️ {h['doc']}<br>
-                ⭐ Rating: {rating()}<br>
-                📍 <a href="{maps_link(h['name'], city)}">View Location</a>
-                </div>
-                """, unsafe_allow_html=True)
-
     # -------- PDF --------
     if st.button("Download Report"):
-        pdf = generate_pdf(name, age, gender, symptoms, disease, conf, city)
+        pdf = generate_pdf(name, age, gender, symptoms, disease, conf, "Chennai")
         with open(pdf, "rb") as f:
             st.download_button(
                 "📄 Download PDF Report",
