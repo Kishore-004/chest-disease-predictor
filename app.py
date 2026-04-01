@@ -16,22 +16,14 @@ from reportlab.lib.pagesizes import A4
 st.set_page_config(page_title="AI Healthcare", layout="wide")
 
 # -----------------------------
-# DARK MODE TOGGLE
+# DARK MODE
 # -----------------------------
 dark_mode = st.sidebar.toggle("🌙 Dark Mode")
 
-if dark_mode:
-    bg = "#1e1e1e"
-    text = "white"
-    card = "#2c2c2c"
-else:
-    bg = "#f5f7fa"
-    text = "#2c3e50"
-    card = "white"
+bg = "#1e1e1e" if dark_mode else "#f5f7fa"
+text = "white" if dark_mode else "#2c3e50"
+card = "#2c2c2c" if dark_mode else "white"
 
-# -----------------------------
-# CUSTOM CSS
-# -----------------------------
 st.markdown(f"""
 <style>
 body {{
@@ -45,11 +37,6 @@ body {{
     box-shadow: 0px 4px 12px rgba(0,0,0,0.1);
     margin-bottom: 20px;
 }}
-.result {{
-    font-size: 32px;
-    font-weight: bold;
-    color: #27ae60;
-}}
 </style>
 """, unsafe_allow_html=True)
 
@@ -57,7 +44,7 @@ body {{
 # HEADER
 # -----------------------------
 st.markdown("<h1 style='text-align:center;'>🩺 AI Healthcare Dashboard</h1>", unsafe_allow_html=True)
-st.markdown("<p style='text-align:center;'>Smart Disease Detection & Hospital Finder</p>", unsafe_allow_html=True)
+st.markdown("<p style='text-align:center;'>Disease Detection + Smart Diagnosis</p>", unsafe_allow_html=True)
 st.markdown("---")
 
 # -----------------------------
@@ -67,6 +54,16 @@ MODEL_PATH = "model.tflite"
 FILE_ID = "1CBdRBXsze5YgdbRnC8H3GYtqLlydeF-j"
 
 CLASS_NAMES = ['COVID19','NORMAL','PNEUMONIA','TURBERCULOSIS']
+
+# -----------------------------
+# SYMPTOMS MAP
+# -----------------------------
+SYMPTOM_MAP = {
+    "COVID19": ["Fever", "Cough", "Fatigue"],
+    "PNEUMONIA": ["Fever", "Chest Pain", "Breathing Difficulty"],
+    "TURBERCULOSIS": ["Weight Loss", "Night Sweats", "Cough"],
+    "NORMAL": []
+}
 
 # -----------------------------
 # HOSPITAL DATA
@@ -104,12 +101,23 @@ def get_maps_link(hospital, city):
 def get_rating():
     return round(random.uniform(3.5, 5.0), 1)
 
+def symptom_score(disease, symptoms):
+    if disease not in SYMPTOM_MAP:
+        return 0
+    match = set(symptoms).intersection(SYMPTOM_MAP[disease])
+    return len(match) / (len(SYMPTOM_MAP[disease]) + 1e-5)
+
 # -----------------------------
 # SIDEBAR INPUT
 # -----------------------------
 st.sidebar.header("👤 Patient Info")
 name = st.sidebar.text_input("Name")
 age = st.sidebar.number_input("Age", 0, 120)
+
+symptoms = st.sidebar.multiselect(
+    "🤒 Symptoms",
+    ["Fever", "Cough", "Chest Pain", "Breathing Difficulty", "Fatigue", "Weight Loss", "Night Sweats"]
+)
 
 uploaded_file = st.file_uploader("📤 Upload X-ray")
 
@@ -126,14 +134,27 @@ if uploaded_file:
     interpreter.invoke()
     preds = interpreter.get_tensor(output_details[0]['index'])
 
-    disease = CLASS_NAMES[np.argmax(preds)]
-    conf = np.max(preds)*100
+    # -----------------------------
+    # COMBINED PREDICTION
+    # -----------------------------
+    model_scores = preds[0]
+    final_scores = []
+
+    for i, d in enumerate(CLASS_NAMES):
+        img_score = model_scores[i]
+        sym_score = symptom_score(d, symptoms)
+        final = (0.7 * img_score) + (0.3 * sym_score)
+        final_scores.append(final)
+
+    final_scores = np.array(final_scores)
+
+    disease = CLASS_NAMES[np.argmax(final_scores)]
+    conf = np.max(final_scores) * 100
 
     # -----------------------------
     # METRICS
     # -----------------------------
     col1, col2 = st.columns(2)
-
     col1.metric("🧠 Disease", disease)
     col2.metric("📊 Confidence", f"{conf:.2f}%")
 
@@ -150,12 +171,12 @@ if uploaded_file:
     with col2:
         st.markdown("<div class='card'>", unsafe_allow_html=True)
         fig, ax = plt.subplots()
-        ax.bar(CLASS_NAMES, preds[0])
+        ax.bar(CLASS_NAMES, final_scores)
         st.pyplot(fig)
         st.markdown("</div>", unsafe_allow_html=True)
 
     # -----------------------------
-    # HOSPITALS GRID
+    # HOSPITALS
     # -----------------------------
     st.markdown("## 🏥 Nearby Hospitals")
 
@@ -166,7 +187,6 @@ if uploaded_file:
 
         if hospitals:
             cols = st.columns(2)
-
             for i, h in enumerate(hospitals):
                 with cols[i % 2]:
                     rating = get_rating()
@@ -197,6 +217,7 @@ if uploaded_file:
             Paragraph(f"Age: {age}", styles["Normal"]),
             Paragraph(f"Disease: {disease}", styles["Normal"]),
             Paragraph(f"Confidence: {conf:.2f}%", styles["Normal"]),
+            Paragraph(f"Symptoms: {', '.join(symptoms)}", styles["Normal"]),
         ]
 
         doc.build(elements)
