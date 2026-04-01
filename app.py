@@ -6,7 +6,7 @@ import tensorflow as tf
 import random
 import matplotlib.pyplot as plt
 
-from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer
+from reportlab.platypus import SimpleDocTemplate, Paragraph
 from reportlab.lib.styles import getSampleStyleSheet
 
 # ---------------- CONFIG ----------------
@@ -43,32 +43,32 @@ st.write("Disease Detection + Explanation + Hospital Suggestion")
 # ---------------- DISEASE INFO ----------------
 DISEASE_INFO = {
     "TURBERCULOSIS": {
-        "desc": "Tuberculosis is a serious infection affecting lungs.",
-        "sym": "Cough, weight loss, night sweats.",
-        "cause": "Bacteria spreads through air.",
-        "treat": "6-9 months antibiotics.",
-        "prec": "Early diagnosis & full treatment."
+        "desc": "Tuberculosis is a serious lung infection caused by bacteria. It spreads through air when infected people cough or sneeze. Symptoms develop slowly and include cough, fatigue, and weight loss.",
+        "sym": "Long-term cough, weight loss, night sweats, fatigue.",
+        "cause": "Mycobacterium tuberculosis bacteria.",
+        "treat": "Continuous antibiotics for 6–9 months.",
+        "prec": "Early diagnosis, avoid close contact, complete medication."
     },
     "PNEUMONIA": {
-        "desc": "Lung infection causing fluid buildup.",
-        "sym": "Fever, cough, chest pain.",
-        "cause": "Bacteria or virus.",
-        "treat": "Antibiotics & rest.",
-        "prec": "Vaccination."
+        "desc": "Pneumonia is an infection where air sacs in lungs fill with fluid. It makes breathing difficult and can become serious if untreated.",
+        "sym": "Fever, cough with mucus, chest pain.",
+        "cause": "Bacteria, virus or fungi.",
+        "treat": "Antibiotics, rest and oxygen if needed.",
+        "prec": "Vaccination, hygiene, strong immunity."
     },
     "COVID19": {
-        "desc": "Viral respiratory disease.",
-        "sym": "Fever, cough, fatigue.",
-        "cause": "Virus spread.",
-        "treat": "Rest & care.",
-        "prec": "Mask & vaccine."
+        "desc": "COVID-19 is a viral respiratory disease affecting lungs and breathing. It spreads quickly through droplets.",
+        "sym": "Fever, cough, fatigue, breathing issues.",
+        "cause": "SARS-CoV-2 virus.",
+        "treat": "Rest, fluids and supportive care.",
+        "prec": "Mask, vaccination, distancing."
     },
     "NORMAL": {
-        "desc": "Healthy lungs.",
-        "sym": "None.",
-        "cause": "Normal.",
-        "treat": "Not needed.",
-        "prec": "Healthy lifestyle."
+        "desc": "No lung abnormality detected. Lungs appear healthy.",
+        "sym": "No symptoms.",
+        "cause": "Healthy lungs.",
+        "treat": "No treatment needed.",
+        "prec": "Maintain healthy lifestyle."
     }
 }
 
@@ -76,7 +76,7 @@ DISEASE_INFO = {
 HOSPITALS = {
     "Chennai": [
         {"name":"Apollo Hospital","doc":"Dr. Ramesh (Pulmonologist)"},
-        {"name":"MIOT","doc":"Dr. Priya (Chest Specialist)"}
+        {"name":"MIOT International","doc":"Dr. Priya (Chest Specialist)"}
     ],
     "Madurai":[
         {"name":"Meenakshi Mission","doc":"Dr. Karthik"}
@@ -99,7 +99,7 @@ def load_tflite():
     return model
 
 @st.cache_resource
-def load_grad():
+def load_grad_model():
     if not os.path.exists(KERAS_PATH):
         gdown.download(f"https://drive.google.com/uc?id={KERAS_ID}", KERAS_PATH)
     return tf.keras.models.load_model(KERAS_PATH)
@@ -113,7 +113,6 @@ st.sidebar.header("👤 Patient Details")
 
 name = st.sidebar.text_input("Name")
 age = st.sidebar.number_input("Age",0,120)
-
 uploaded = st.sidebar.file_uploader("Upload X-ray")
 
 # ---------------- MAIN ----------------
@@ -129,13 +128,13 @@ if uploaded:
     disease = CLASS_NAMES[np.argmax(preds[0])]
     conf = np.max(preds[0])*100
 
-    st.success(f"Prediction: {disease}")
-    st.info(f"Confidence: {conf:.2f}%")
+    st.success(f"🧠 Prediction: {disease}")
+    st.info(f"📊 Confidence: {conf:.2f}%")
 
     col1,col2 = st.columns(2)
 
     with col1:
-        st.image(img)
+        st.image(img, caption="X-ray")
 
     # ---------------- EXPLANATION ----------------
     info = DISEASE_INFO[disease]
@@ -158,35 +157,44 @@ if uploaded:
     ax.bar(CLASS_NAMES, preds[0])
     st.pyplot(fig)
 
-    # ---------------- GRADCAM ----------------
-    if st.button("Show Affected Area"):
-        model = load_grad()
+    # ---------------- GRADCAM (FIXED) ----------------
+    if st.button("🔥 Show Affected Area"):
+        model = load_grad_model()
 
         last_conv = [l.name for l in model.layers if "conv" in l.name][-1]
+
         grad_model = tf.keras.models.Model(
-            [model.inputs],
-            [model.get_layer(last_conv).output, model.output]
+            inputs=model.inputs,
+            outputs=[model.get_layer(last_conv).output, model.output]
         )
 
         with tf.GradientTape() as tape:
-            conv, pred = grad_model(arr)
-            loss = pred[:, np.argmax(pred[0])]
+            conv_outputs, predictions = grad_model(arr)
 
-        grads = tape.gradient(loss, conv)
-        heatmap = tf.reduce_mean(grads, axis=(0,1,2))
-        heatmap = conv[0] * heatmap
-        heatmap = np.mean(heatmap, axis=-1)
-        heatmap = np.maximum(heatmap,0)
-        heatmap /= np.max(heatmap)
+            class_idx = tf.argmax(predictions[0])
+            class_idx = tf.cast(class_idx, tf.int32)
 
-        heatmap = cv2.resize(heatmap,(224,224))
-        heatmap[heatmap<0.6]=0
+            loss = tf.gather(predictions[0], class_idx)
 
-        heatmap = np.uint8(255*heatmap)
+        grads = tape.gradient(loss, conv_outputs)
+        pooled_grads = tf.reduce_mean(grads, axis=(0,1,2))
+
+        conv_outputs = conv_outputs[0]
+        heatmap = conv_outputs * pooled_grads
+        heatmap = tf.reduce_sum(heatmap, axis=-1)
+
+        heatmap = np.maximum(heatmap, 0)
+        heatmap /= (np.max(heatmap) + 1e-8)
+
+        heatmap = cv2.resize(heatmap, (224,224))
+        heatmap[heatmap < 0.6] = 0
+
+        heatmap = np.uint8(255 * heatmap)
         heatmap = cv2.applyColorMap(heatmap, cv2.COLORMAP_JET)
 
-        overlay = cv2.addWeighted(np.array(img_r),0.6,heatmap,0.7,0)
-        st.image(overlay, caption="🔥 Affected Area")
+        overlay = cv2.addWeighted(np.array(img_r), 0.6, heatmap, 0.7, 0)
+
+        st.image(overlay, caption="🔥 Affected Lung Area")
 
     # ---------------- HOSPITAL ----------------
     st.markdown("## 🏥 Hospital Suggestions")
@@ -199,12 +207,12 @@ if uploaded:
             🏥 {h['name']}<br>
             👨‍⚕️ {h['doc']}<br>
             ⭐ {rating()}/5<br>
-            <a href="{maps_link(h['name'],city)}">📍 View Map</a>
+            <a href="{maps_link(h['name'],city)}" target="_blank">📍 View Map</a>
             </div>
             """, unsafe_allow_html=True)
 
     # ---------------- PDF ----------------
-    if st.button("Download Report"):
+    if st.button("📄 Download Report"):
         file = "report.pdf"
         doc = SimpleDocTemplate(file)
         styles = getSampleStyleSheet()
@@ -218,4 +226,4 @@ if uploaded:
         doc.build(content)
 
         with open(file,"rb") as f:
-            st.download_button("Download", f)
+            st.download_button("Download PDF", f)
