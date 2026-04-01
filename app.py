@@ -144,12 +144,10 @@ if uploaded:
     # -------- MAIN LAYOUT --------
     col1,col2 = st.columns([1,1])
 
-    # LEFT: IMAGE + CHART
     with col1:
         st.markdown('<div class="card">', unsafe_allow_html=True)
         st.image(img, use_container_width=True)
 
-        st.markdown("### 📊 Prediction Distribution")
         fig, ax = plt.subplots(figsize=(3,3))
         ax.bar(CLASS_NAMES, preds[0])
         ax.set_xticklabels(CLASS_NAMES, rotation=45)
@@ -157,8 +155,8 @@ if uploaded:
 
         st.markdown('</div>', unsafe_allow_html=True)
 
-    # RIGHT: DISEASE INFO
     info = DISEASE_INFO[disease]
+
     with col2:
         st.markdown('<div class="card">', unsafe_allow_html=True)
         st.markdown("### 📖 Disease Insights")
@@ -176,12 +174,12 @@ if uploaded:
 
         st.markdown('</div>', unsafe_allow_html=True)
 
-    # -------- GRADCAM FINAL FIX --------
+    # -------- FINAL GRADCAM --------
     if st.button("🔥 Show Affected Area"):
         try:
             model = load_grad_model()
 
-            # Find last Conv2D layer safely
+            # Find last Conv2D
             last_conv = None
             for layer in reversed(model.layers):
                 if isinstance(layer, tf.keras.layers.Conv2D):
@@ -199,7 +197,6 @@ if uploaded:
                 with tf.GradientTape() as tape:
                     conv_outputs, predictions = grad_model(arr)
 
-                    # FIX: handle list output
                     if isinstance(predictions, list):
                         predictions = predictions[0]
 
@@ -220,7 +217,11 @@ if uploaded:
                     heatmap = np.maximum(heatmap,0)
                     heatmap /= (np.max(heatmap)+1e-8)
 
-                    heatmap = cv2.resize(heatmap.numpy(), (224,224))
+                    # FIX numpy issue
+                    if hasattr(heatmap, "numpy"):
+                        heatmap = heatmap.numpy()
+
+                    heatmap = cv2.resize(heatmap, (224,224))
                     heatmap = np.uint8(255 * heatmap)
                     heatmap = cv2.applyColorMap(heatmap, cv2.COLORMAP_JET)
 
