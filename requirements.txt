@@ -4,6 +4,6 @@ pillow
 matplotlib
 opencv-python-headless
 reportlab
-tensorflow==2.15.0
+tensorflow==2.13.1
 protobuf==3.20.3
 gdown
