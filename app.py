@@ -140,6 +140,7 @@ if uploaded:
     # -------- MAIN LAYOUT --------
     col1,col2 = st.columns([1,1])
 
+    # LEFT
     with col1:
         st.markdown('<div class="card">', unsafe_allow_html=True)
         st.image(img, use_container_width=True)
@@ -151,8 +152,8 @@ if uploaded:
 
         st.markdown('</div>', unsafe_allow_html=True)
 
+    # RIGHT
     info = DISEASE_INFO[disease]
-
     with col2:
         st.markdown('<div class="card">', unsafe_allow_html=True)
         st.markdown("### 📖 Disease Insights")
@@ -173,18 +174,19 @@ if uploaded:
         try:
             model = load_grad_model()
 
+            # ✅ SAFE Conv layer detection
             last_conv = None
             for layer in reversed(model.layers):
-                if len(layer.output_shape) == 4:
+                if isinstance(layer, tf.keras.layers.Conv2D):
                     last_conv = layer.name
                     break
 
             if last_conv is None:
-                st.error("No conv layer found")
+                st.error("❌ No Conv2D layer found → GradCAM not possible")
             else:
                 grad_model = tf.keras.models.Model(
-                    [model.inputs],
-                    [model.get_layer(last_conv).output, model.output]
+                    inputs=model.input,
+                    outputs=[model.get_layer(last_conv).output, model.output]
                 )
 
                 with tf.GradientTape() as tape:
@@ -195,7 +197,7 @@ if uploaded:
                 grads = tape.gradient(loss, conv_outputs)
 
                 if grads is None:
-                    st.error("Gradients not computed")
+                    st.error("❌ Gradients not computed")
                 else:
                     pooled_grads = tf.reduce_mean(grads, axis=(0,1,2))
                     conv_outputs = conv_outputs[0]
@@ -215,7 +217,7 @@ if uploaded:
                         heatmap,0.4,0
                     )
 
-                    st.image(overlay, caption="🔥 Affected Area", use_container_width=True)
+                    st.image(overlay, caption="🔥 Affected Lung Region", use_container_width=True)
 
         except Exception as e:
             st.error(f"GradCAM Error: {e}")
@@ -235,7 +237,7 @@ if uploaded:
                     <b>🏥 {h['name']}</b><br><br>
                     👨‍⚕️ {h['doc']}<br><br>
                     ⭐ {rating()}/5<br><br>
-                    <a href="{maps_link(h['name'], city)}">📍 Map</a>
+                    <a href="{maps_link(h['name'], city)}">📍 View Map</a>
                     </div>
                     """, unsafe_allow_html=True)
         else:
