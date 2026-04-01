@@ -2,7 +2,6 @@ streamlit
 numpy
 pillow
 matplotlib
-opencv-python-headless
-reportlab
 gdown
 tensorflow
+reportlab
