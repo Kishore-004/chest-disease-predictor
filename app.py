@@ -13,30 +13,19 @@ from reportlab.lib.pagesizes import A4
 # ---------------- CONFIG ----------------
 st.set_page_config(page_title="AI Healthcare", layout="wide")
 
-# TITLE
 st.markdown("""
 <h1 style='text-align: center; color: #1f77b4;'>
 🩺 AI Powered Chest Disease Prediction and Hospital Suggestion
 </h1>
 """, unsafe_allow_html=True)
 
-MODEL_PATH = "model.tflite"
-FILE_ID = "1CBdRBXsze5YgdbRnC8H3GYtqLlydeF-j"
-
-KERAS_PATH = "model.keras"
-KERAS_ID = "1GRO5EwB9PDX61G1lZfIHChvCK7JkYe6v"
-
-CLASS_NAMES = ['COVID19','NORMAL','PNEUMONIA','TURBERCULOSIS']
-
-# ---------------- GLOBAL FONT FIX ----------------
+# ---------------- GLOBAL FONT ----------------
 st.markdown("""
 <style>
 html, body, [class*="css"] {
     font-size:16px !important;
     font-weight:600 !important;
 }
-
-/* Cards */
 .card {
     background:white;
     padding:18px;
@@ -44,8 +33,6 @@ html, body, [class*="css"] {
     box-shadow:0px 4px 12px rgba(0,0,0,0.08);
     margin-bottom:15px;
 }
-
-/* Highlight */
 .highlight {
     background: linear-gradient(135deg,#ff758c,#ff7eb3);
     color:white;
@@ -55,31 +42,34 @@ html, body, [class*="css"] {
     font-weight:bold;
     text-align:center;
 }
-
-/* Sidebar */
-section[data-testid="stSidebar"] {
-    font-size:16px !important;
-    font-weight:600 !important;
-}
 </style>
 """, unsafe_allow_html=True)
 
-# ---------------- SYMPTOMS LIST ----------------
+# ---------------- MODEL ----------------
+MODEL_PATH = "model.tflite"
+FILE_ID = "1CBdRBXsze5YgdbRnC8H3GYtqLlydeF-j"
+
+KERAS_PATH = "model.keras"
+KERAS_ID = "1GRO5EwB9PDX61G1lZfIHChvCK7JkYe6v"
+
+CLASS_NAMES = ['COVID19','NORMAL','PNEUMONIA','TURBERCULOSIS']
+
+# ---------------- SYMPTOMS ----------------
 SYMPTOMS_LIST = [
-    "Fever", "Dry Cough", "Chronic Cough", "Chest Pain",
-    "Breathing Difficulty", "Shortness of Breath",
-    "Fatigue", "Weight Loss", "Night Sweats"
+    "Fever","Dry Cough","Chronic Cough","Chest Pain",
+    "Breathing Difficulty","Shortness of Breath",
+    "Fatigue","Weight Loss","Night Sweats"
 ]
 
 # ---------------- DISEASE DETAILS ----------------
 DISEASE_DETAILS = {
-    "COVID19": "COVID-19 is a viral respiratory disease affecting lungs and breathing patterns. It spreads through droplets and affects oxygen levels. Common symptoms include fever, dry cough, fatigue, and breathing issues. In severe cases, it may cause pneumonia and lung damage. Early diagnosis and isolation are critical. Vaccination and hygiene reduce risk.",
-    "PNEUMONIA": "Pneumonia is a lung infection where air sacs fill with fluid or pus. It can be caused by bacteria, viruses, or fungi. Symptoms include fever, cough, chest pain, and difficulty breathing. It can be mild or life-threatening. Treatment includes antibiotics, rest, and oxygen therapy. Vaccination and early care help prevent complications.",
-    "TURBERCULOSIS": "Tuberculosis is a bacterial infection affecting lungs and spreads through air. It causes persistent cough, weight loss, and night sweats. It can damage lung tissue if untreated. Diagnosis requires imaging and lab tests. Treatment involves long-term antibiotics for 6–9 months. Early detection prevents spread and complications.",
-    "NORMAL": "No abnormalities detected in the lungs. The X-ray appears normal with no signs of infection or disease. Maintain a healthy lifestyle and regular checkups to ensure continued well-being."
+    "COVID19":"COVID-19 is a viral respiratory disease affecting lungs. It spreads through droplets. Symptoms include fever, dry cough, breathing difficulty, and fatigue. Severe cases can damage lungs and reduce oxygen levels. Early diagnosis and isolation are important. Vaccination helps prevent infection.",
+    "PNEUMONIA":"Pneumonia is an infection that inflames air sacs in lungs. It can be caused by bacteria or viruses. Symptoms include chest pain, cough, fever, and breathing issues. It may become severe if untreated. Treatment includes antibiotics and rest. Early care prevents complications.",
+    "TURBERCULOSIS":"Tuberculosis is a bacterial infection affecting lungs. It spreads through air. Symptoms include chronic cough, weight loss, night sweats, and fatigue. It can damage lungs seriously if untreated. Treatment requires long-term antibiotics. Early diagnosis prevents spread.",
+    "NORMAL":"No disease detected. Lungs appear normal with no infection signs. Maintain healthy lifestyle and routine checkups."
 }
 
-# ---------------- HOSPITALS ----------------
+# ---------------- HOSPITALS (ALL TN) ----------------
 HOSPITALS = {
     "Chennai":[
         {"name":"Apollo Hospital","doc":"Dr. Ramesh (Pulmonologist)"},
@@ -88,6 +78,26 @@ HOSPITALS = {
     "Coimbatore":[
         {"name":"KG Hospital","doc":"Dr. Vignesh"},
         {"name":"Ganga Hospital","doc":"Dr. Suresh"}
+    ],
+    "Madurai":[
+        {"name":"Meenakshi Mission Hospital","doc":"Dr. Karthik"},
+        {"name":"Apollo Specialty Hospital","doc":"Dr. Anitha"}
+    ],
+    "Trichy":[
+        {"name":"Kauvery Hospital","doc":"Dr. Naveen"},
+        {"name":"Apollo Clinic","doc":"Dr. Lakshmi"}
+    ],
+    "Salem":[
+        {"name":"Sri Gokulam Hospital","doc":"Dr. Prakash"},
+        {"name":"SKS Hospital","doc":"Dr. Meena"}
+    ],
+    "Erode":[
+        {"name":"Erode Trust Hospital","doc":"Dr. Arjun"},
+        {"name":"KMCH Erode","doc":"Dr. Kavya"}
+    ],
+    "Vellore":[
+        {"name":"CMC Vellore","doc":"Dr. Daniel"},
+        {"name":"Naruvi Hospital","doc":"Dr. Rekha"}
     ]
 }
 
@@ -104,30 +114,28 @@ def generate_pdf(name, age, gender, symptoms, disease, conf, city):
     styles = getSampleStyleSheet()
     content = []
 
-    content.append(Paragraph("<b>AI Healthcare Diagnostic Report</b>", styles["Title"]))
+    content.append(Paragraph("<b>AI Healthcare Report</b>", styles["Title"]))
     content.append(Spacer(1,10))
 
-    content.append(Paragraph("<b>Patient Details</b>", styles["Heading2"]))
     content.append(Paragraph(f"Name: {name}", styles["Normal"]))
     content.append(Paragraph(f"Age: {age}", styles["Normal"]))
     content.append(Paragraph(f"Gender: {gender}", styles["Normal"]))
     content.append(Paragraph(f"Symptoms: {', '.join(symptoms)}", styles["Normal"]))
     content.append(Spacer(1,10))
 
-    if os.path.exists("xray.png") and os.path.exists("gradcam.png"):
+    if os.path.exists("xray.png"):
         content.append(RLImage("xray.png", width=250, height=250))
+    if os.path.exists("gradcam.png"):
         content.append(RLImage("gradcam.png", width=250, height=250))
 
     content.append(Spacer(1,10))
-
-    content.append(Paragraph("<b>Disease Information</b>", styles["Heading2"]))
     content.append(Paragraph(DISEASE_DETAILS[disease], styles["Normal"]))
-    content.append(Spacer(1,10))
 
-    content.append(Paragraph("<b>Recommended Hospitals</b>", styles["Heading2"]))
     if city in HOSPITALS:
+        content.append(Spacer(1,10))
+        content.append(Paragraph("<b>Hospitals</b>", styles["Heading2"]))
         for h in HOSPITALS[city]:
-            content.append(Paragraph(f"{h['name']} - {h['doc']} - Rating: {rating()}⭐", styles["Normal"]))
+            content.append(Paragraph(f"{h['name']} - {h['doc']} - {rating()}⭐", styles["Normal"]))
             content.append(Paragraph(maps_link(h['name'], city), styles["Normal"]))
 
     doc.build(content)
@@ -175,7 +183,7 @@ if uploaded:
     disease = CLASS_NAMES[np.argmax(preds[0])]
     conf = np.max(preds[0])*100
 
-    st.markdown(f'<div class="highlight">🧠 Predicted Disease: {disease} ({conf:.2f}%)</div>', unsafe_allow_html=True)
+    st.markdown(f'<div class="highlight">Prediction: {disease} ({conf:.2f}%)</div>', unsafe_allow_html=True)
 
     col1,col2 = st.columns(2)
 
@@ -187,10 +195,9 @@ if uploaded:
         st.pyplot(fig)
 
     with col2:
-        st.markdown('<div class="card">', unsafe_allow_html=True)
-        st.markdown("### 📖 Detailed Explanation")
+        st.markdown('<div class="card">')
         st.write(DISEASE_DETAILS[disease])
-        st.markdown('</div>', unsafe_allow_html=True)
+        st.markdown('</div>')
 
     # -------- GRADCAM --------
     if st.button("Show GradCAM"):
@@ -233,13 +240,25 @@ if uploaded:
 
         st.image(overlay, width=400)
 
+    # -------- HOSPITALS --------
+    st.markdown("## 🏥 Hospital Suggestions")
+    city = st.text_input("Enter City")
+
+    if city:
+        city = city.strip().title()
+        if city in HOSPITALS:
+            for h in HOSPITALS[city]:
+                st.markdown(f"""
+                <div class="card">
+                <b>{h['name']}</b><br>
+                {h['doc']}<br>
+                ⭐ {rating()}<br>
+                <a href="{maps_link(h['name'], city)}">Map</a>
+                </div>
+                """, unsafe_allow_html=True)
+
     # -------- PDF --------
     if st.button("Download Report"):
-        pdf = generate_pdf(name, age, gender, symptoms, disease, conf, "Chennai")
+        pdf = generate_pdf(name, age, gender, symptoms, disease, conf, city if city else "Chennai")
         with open(pdf, "rb") as f:
-            st.download_button(
-                "📄 Download PDF Report",
-                data=f,
-                file_name="Medical_Report.pdf",
-                mime="application/pdf"
-            )
+            st.download_button("Download PDF", f, file_name="report.pdf", mime="application/pdf")
