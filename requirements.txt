@@ -5,3 +5,4 @@ matplotlib
 gdown
 tensorflow
 reportlab
+opencv-python-headless
