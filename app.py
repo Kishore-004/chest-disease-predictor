@@ -43,32 +43,32 @@ st.write("Disease Detection + Explanation + Hospital Suggestion")
 # ---------------- DISEASE INFO ----------------
 DISEASE_INFO = {
     "TURBERCULOSIS": {
-        "desc": "Tuberculosis is a serious lung infection caused by bacteria. It spreads through air when infected people cough or sneeze. Symptoms develop slowly and include cough, fatigue, and weight loss.",
-        "sym": "Long-term cough, weight loss, night sweats, fatigue.",
-        "cause": "Mycobacterium tuberculosis bacteria.",
-        "treat": "Continuous antibiotics for 6–9 months.",
-        "prec": "Early diagnosis, avoid close contact, complete medication."
+        "desc": "Tuberculosis is a serious lung infection caused by bacteria that spreads through air.",
+        "sym": "Long-term cough, weight loss, night sweats.",
+        "cause": "TB bacteria (Mycobacterium tuberculosis).",
+        "treat": "6–9 months antibiotics.",
+        "prec": "Early diagnosis and complete treatment."
     },
     "PNEUMONIA": {
-        "desc": "Pneumonia is an infection where air sacs in lungs fill with fluid. It makes breathing difficult and can become serious if untreated.",
-        "sym": "Fever, cough with mucus, chest pain.",
-        "cause": "Bacteria, virus or fungi.",
-        "treat": "Antibiotics, rest and oxygen if needed.",
-        "prec": "Vaccination, hygiene, strong immunity."
+        "desc": "Pneumonia is a lung infection where air sacs fill with fluid.",
+        "sym": "Fever, cough, chest pain.",
+        "cause": "Bacteria or virus.",
+        "treat": "Antibiotics and rest.",
+        "prec": "Vaccination and hygiene."
     },
     "COVID19": {
-        "desc": "COVID-19 is a viral respiratory disease affecting lungs and breathing. It spreads quickly through droplets.",
-        "sym": "Fever, cough, fatigue, breathing issues.",
-        "cause": "SARS-CoV-2 virus.",
-        "treat": "Rest, fluids and supportive care.",
-        "prec": "Mask, vaccination, distancing."
+        "desc": "COVID-19 is a viral respiratory infection affecting lungs.",
+        "sym": "Fever, cough, breathing issues.",
+        "cause": "Coronavirus.",
+        "treat": "Rest and supportive care.",
+        "prec": "Mask and vaccination."
     },
     "NORMAL": {
-        "desc": "No lung abnormality detected. Lungs appear healthy.",
+        "desc": "No lung abnormality detected.",
         "sym": "No symptoms.",
         "cause": "Healthy lungs.",
-        "treat": "No treatment needed.",
-        "prec": "Maintain healthy lifestyle."
+        "treat": "Not required.",
+        "prec": "Healthy lifestyle."
     }
 }
 
@@ -80,6 +80,10 @@ HOSPITALS = {
     ],
     "Madurai":[
         {"name":"Meenakshi Mission","doc":"Dr. Karthik"}
+    ],
+    "Coimbatore":[
+        {"name":"KG Hospital","doc":"Dr. Vignesh"},
+        {"name":"Ganga Hospital","doc":"Dr. Suresh"}
     ]
 }
 
@@ -157,7 +161,7 @@ if uploaded:
     ax.bar(CLASS_NAMES, preds[0])
     st.pyplot(fig)
 
-    # ---------------- GRADCAM (FIXED) ----------------
+    # ---------------- GRADCAM FIXED ----------------
     if st.button("🔥 Show Affected Area"):
         model = load_grad_model()
 
@@ -196,20 +200,25 @@ if uploaded:
 
         st.image(overlay, caption="🔥 Affected Lung Area")
 
-    # ---------------- HOSPITAL ----------------
+    # ---------------- HOSPITAL FIXED ----------------
     st.markdown("## 🏥 Hospital Suggestions")
     city = st.text_input("Enter City")
 
-    if city in HOSPITALS:
-        for h in HOSPITALS[city]:
-            st.markdown(f"""
-            <div class="card">
-            🏥 {h['name']}<br>
-            👨‍⚕️ {h['doc']}<br>
-            ⭐ {rating()}/5<br>
-            <a href="{maps_link(h['name'],city)}" target="_blank">📍 View Map</a>
-            </div>
-            """, unsafe_allow_html=True)
+    if city:
+        city_clean = city.strip().title()
+
+        if city_clean in HOSPITALS:
+            for h in HOSPITALS[city_clean]:
+                st.markdown(f"""
+                <div class="card">
+                🏥 {h['name']}<br>
+                👨‍⚕️ {h['doc']}<br>
+                ⭐ {rating()}/5<br>
+                <a href="{maps_link(h['name'], city_clean)}" target="_blank">📍 View Map</a>
+                </div>
+                """, unsafe_allow_html=True)
+        else:
+            st.warning("❌ No hospitals found for this city")
 
     # ---------------- PDF ----------------
     if st.button("📄 Download Report"):
