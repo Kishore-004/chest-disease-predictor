@@ -11,45 +11,10 @@ from reportlab.lib.styles import getSampleStyleSheet
 from reportlab.lib.pagesizes import A4
 
 # -----------------------------
-# PAGE CONFIG
+# CONFIG
 # -----------------------------
 st.set_page_config(page_title="AI Healthcare", layout="wide")
 
-# -----------------------------
-# DARK MODE
-# -----------------------------
-dark_mode = st.sidebar.toggle("🌙 Dark Mode")
-
-bg = "#1e1e1e" if dark_mode else "#f5f7fa"
-text = "white" if dark_mode else "#2c3e50"
-card = "#2c2c2c" if dark_mode else "white"
-
-st.markdown(f"""
-<style>
-body {{
-    background-color: {bg};
-    color: {text};
-}}
-.card {{
-    background-color: {card};
-    padding: 20px;
-    border-radius: 15px;
-    box-shadow: 0px 4px 12px rgba(0,0,0,0.1);
-    margin-bottom: 20px;
-}}
-</style>
-""", unsafe_allow_html=True)
-
-# -----------------------------
-# HEADER
-# -----------------------------
-st.markdown("<h1 style='text-align:center;'>🩺 AI Healthcare Dashboard</h1>", unsafe_allow_html=True)
-st.markdown("<p style='text-align:center;'>Disease Detection + Explainable AI</p>", unsafe_allow_html=True)
-st.markdown("---")
-
-# -----------------------------
-# MODEL CONFIG
-# -----------------------------
 MODEL_PATH = "model.tflite"
 FILE_ID = "1CBdRBXsze5YgdbRnC8H3GYtqLlydeF-j"
 
@@ -59,37 +24,61 @@ KERAS_FILE_ID = "1GRO5EwB9PDX61G1lZfIHChvCK7JkYe6v"
 CLASS_NAMES = ['COVID19','NORMAL','PNEUMONIA','TURBERCULOSIS']
 
 # -----------------------------
-# DISEASE EXPLANATION
+# UI STYLE
+# -----------------------------
+st.markdown("""
+<style>
+.card {
+    background-color: white;
+    padding: 20px;
+    border-radius: 15px;
+    margin-bottom: 20px;
+}
+</style>
+""", unsafe_allow_html=True)
+
+st.title("🩺 AI Healthcare System")
+st.write("Disease Detection + Explanation + Hospital Suggestion")
+
+# -----------------------------
+# DISEASE EXPLANATION (HUMAN FRIENDLY)
 # -----------------------------
 DISEASE_INFO = {
-    "COVID19": {
-        "description": "COVID-19 is a contagious respiratory disease caused by SARS-CoV-2 virus.",
-        "symptoms": "Fever, cough, fatigue, breathing issues.",
-        "causes": "Spread through droplets.",
-        "treatment": "Rest, fluids, antiviral support.",
-        "precautions": "Mask, hygiene, vaccination."
-    },
-    "PNEUMONIA": {
-        "description": "Lung infection causing fluid buildup.",
-        "symptoms": "Chest pain, fever, cough.",
-        "causes": "Bacteria/virus.",
-        "treatment": "Antibiotics, oxygen.",
-        "precautions": "Vaccination, hygiene."
-    },
-    "TURBERCULOSIS": {
-        "description": "Serious bacterial lung disease.",
-        "symptoms": "Cough, weight loss, night sweats.",
-        "causes": "TB bacteria.",
-        "treatment": "Long-term antibiotics.",
-        "precautions": "Early diagnosis."
-    },
-    "NORMAL": {
-        "description": "No abnormality detected.",
-        "symptoms": "None.",
-        "causes": "Healthy lungs.",
-        "treatment": "Not needed.",
-        "precautions": "Healthy lifestyle."
-    }
+    "COVID19": """
+COVID-19 is a viral infection that mainly affects the lungs and breathing system. 
+It spreads from person to person through droplets when someone coughs or sneezes. 
+People may experience fever, tiredness, cough, and breathing difficulty. 
+In most cases, symptoms are mild, but it can become serious in some individuals. 
+Proper rest, hydration, and medical care help recovery. 
+Vaccination and wearing masks are effective ways to prevent the disease.
+""",
+
+    "PNEUMONIA": """
+Pneumonia is an infection in the lungs that causes the air sacs to fill with fluid. 
+This makes breathing difficult and may cause chest pain. 
+Common symptoms include fever, cough with mucus, and shortness of breath. 
+It can be caused by bacteria, viruses, or fungi. 
+Treatment includes antibiotics, rest, and sometimes oxygen support. 
+Early diagnosis helps prevent complications and speeds recovery.
+""",
+
+    "TURBERCULOSIS": """
+Tuberculosis (TB) is a serious bacterial infection that mainly affects the lungs. 
+It spreads through the air when an infected person coughs or sneezes. 
+Symptoms include long-term cough, weight loss, night sweats, and fatigue. 
+TB develops slowly and may not show symptoms early. 
+Treatment requires taking antibiotics for several months. 
+If treated properly, TB is completely curable.
+""",
+
+    "NORMAL": """
+No major abnormalities were detected in the lungs. 
+Your lungs appear healthy based on the uploaded X-ray image. 
+There are no signs of infection or disease detected by the model. 
+If you have symptoms, it is still recommended to consult a doctor. 
+Maintaining a healthy lifestyle helps keep lungs strong. 
+Avoid smoking and stay physically active.
+"""
 }
 
 # -----------------------------
@@ -103,15 +92,15 @@ SYMPTOM_MAP = {
 }
 
 # -----------------------------
-# HOSPITALS + SPECIALISTS
+# HOSPITALS
 # -----------------------------
 HOSPITALS = {
     "Chennai": [
         {"name": "Apollo Hospital", "specialist": "Dr. Ramesh Kumar (Pulmonologist)"},
-        {"name": "MIOT International", "specialist": "Dr. Priya Sharma"},
+        {"name": "MIOT International", "specialist": "Dr. Priya Sharma"}
     ],
     "Madurai": [
-        {"name": "Meenakshi Mission", "specialist": "Dr. Karthik"},
+        {"name": "Meenakshi Mission", "specialist": "Dr. Karthik"}
     ]
 }
 
@@ -168,11 +157,10 @@ def generate_gradcam(image, model):
 # -----------------------------
 # INPUTS
 # -----------------------------
-st.sidebar.header("Patient Info")
-name = st.sidebar.text_input("Name")
-age = st.sidebar.number_input("Age", 0, 120)
+name = st.text_input("Name")
+age = st.number_input("Age", 0, 120)
 
-symptoms = st.sidebar.multiselect(
+symptoms = st.multiselect(
     "Symptoms",
     ["Fever","Cough","Chest Pain","Breathing Difficulty","Fatigue","Weight Loss","Night Sweats"]
 )
@@ -193,23 +181,20 @@ if uploaded_file:
 
     final_scores = []
     for i, d in enumerate(CLASS_NAMES):
-        final = 0.7 * preds[0][i] + 0.3 * symptom_score(d, symptoms)
-        final_scores.append(final)
+        final_scores.append(0.7*preds[0][i] + 0.3*symptom_score(d, symptoms))
 
     final_scores = np.array(final_scores)
     disease = CLASS_NAMES[np.argmax(final_scores)]
-    conf = np.max(final_scores) * 100
+    conf = np.max(final_scores)*100
 
-    st.metric("Disease", disease)
-    st.metric("Confidence", f"{conf:.2f}%")
+    st.success(f"{disease} ({conf:.2f}%)")
 
     # 📖 Explanation
-    info = DISEASE_INFO[disease]
     st.markdown("## 📖 Disease Explanation")
-    st.write(info)
+    st.markdown(f"<div class='card'>{DISEASE_INFO[disease]}</div>", unsafe_allow_html=True)
 
     # 🔥 GradCAM
-    if st.button("Show Heatmap"):
+    if st.button("Show Affected Area"):
         grad_model = load_gradcam_model()
         heatmap = generate_gradcam(arr, grad_model)
 
@@ -225,4 +210,9 @@ if uploaded_file:
     city = st.text_input("Enter City")
     if city in HOSPITALS:
         for h in HOSPITALS[city]:
-            st.write(h)
+            st.markdown(f"""
+            <div class="card">
+            <b>{h['name']}</b><br>
+            👨‍⚕️ {h['specialist']}
+            </div>
+            """, unsafe_allow_html=True)
