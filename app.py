@@ -16,37 +16,48 @@ from reportlab.lib.pagesizes import A4
 st.set_page_config(page_title="AI Healthcare", layout="wide")
 
 # -----------------------------
-# CUSTOM UI CSS
+# DARK MODE TOGGLE
 # -----------------------------
-st.markdown("""
+dark_mode = st.sidebar.toggle("🌙 Dark Mode")
+
+if dark_mode:
+    bg = "#1e1e1e"
+    text = "white"
+    card = "#2c2c2c"
+else:
+    bg = "#f5f7fa"
+    text = "#2c3e50"
+    card = "white"
+
+# -----------------------------
+# CUSTOM CSS
+# -----------------------------
+st.markdown(f"""
 <style>
-.main {
-    background-color: #f5f7fa;
-}
-h1 {
-    text-align: center;
-    color: #2c3e50;
-}
-.card {
-    background-color: white;
+body {{
+    background-color: {bg};
+    color: {text};
+}}
+.card {{
+    background-color: {card};
     padding: 20px;
     border-radius: 15px;
-    box-shadow: 0px 4px 10px rgba(0,0,0,0.1);
+    box-shadow: 0px 4px 12px rgba(0,0,0,0.1);
     margin-bottom: 20px;
-}
-.result {
-    font-size: 28px;
+}}
+.result {{
+    font-size: 32px;
     font-weight: bold;
     color: #27ae60;
-}
+}}
 </style>
 """, unsafe_allow_html=True)
 
 # -----------------------------
 # HEADER
 # -----------------------------
-st.markdown("<h1>🩺 AI Healthcare System</h1>", unsafe_allow_html=True)
-st.markdown("<p style='text-align:center;'>Chest Disease Detection & Hospital Finder</p>", unsafe_allow_html=True)
+st.markdown("<h1 style='text-align:center;'>🩺 AI Healthcare Dashboard</h1>", unsafe_allow_html=True)
+st.markdown("<p style='text-align:center;'>Smart Disease Detection & Hospital Finder</p>", unsafe_allow_html=True)
 st.markdown("---")
 
 # -----------------------------
@@ -61,14 +72,11 @@ CLASS_NAMES = ['COVID19','NORMAL','PNEUMONIA','TURBERCULOSIS']
 # HOSPITAL DATA
 # -----------------------------
 HOSPITALS = {
-    "Chennai": ["Apollo Hospital Chennai", "MIOT International", "Fortis Malar Hospital"],
-    "Madurai": ["Meenakshi Mission Hospital", "Apollo Specialty Hospital Madurai"],
+    "Chennai": ["Apollo Hospital", "MIOT International", "Fortis Malar"],
+    "Madurai": ["Meenakshi Mission Hospital", "Apollo Specialty"],
     "Coimbatore": ["KG Hospital", "Ganga Hospital", "PSG Hospitals"],
-    "Salem": ["Gokulam Hospital", "Vinayaka Mission Hospital"],
-    "Trichy": ["Kauvery Hospital", "Apollo Hospital Trichy"],
-    "Vellore": ["CMC Vellore", "Naruvi Hospital"],
-    "Tiruvannamalai": ["Govt Medical College Hospital", "Arunai Hospital"],
-    "Krishnagiri": ["Govt Hospital Krishnagiri", "PES Hospital"]
+    "Salem": ["Gokulam Hospital", "Vinayaka Mission"],
+    "Trichy": ["Kauvery Hospital", "Apollo Trichy"],
 }
 
 # -----------------------------
@@ -77,8 +85,7 @@ HOSPITALS = {
 @st.cache_resource
 def load_model():
     if not os.path.exists(MODEL_PATH):
-        with st.spinner("Downloading model... ⏳"):
-            gdown.download(f"https://drive.google.com/uc?id={FILE_ID}", MODEL_PATH)
+        gdown.download(f"https://drive.google.com/uc?id={FILE_ID}", MODEL_PATH)
 
     interpreter = tf.lite.Interpreter(model_path=MODEL_PATH)
     interpreter.allocate_tensors()
@@ -89,25 +96,25 @@ input_details = interpreter.get_input_details()
 output_details = interpreter.get_output_details()
 
 # -----------------------------
-# HELPER FUNCTIONS
+# FUNCTIONS
 # -----------------------------
 def get_maps_link(hospital, city):
-    query = hospital + " " + city
-    return f"https://www.google.com/maps/search/{query.replace(' ', '+')}"
+    return f"https://www.google.com/maps/search/{hospital}+{city}"
 
 def get_rating():
     return round(random.uniform(3.5, 5.0), 1)
 
 # -----------------------------
-# INPUTS
+# SIDEBAR INPUT
 # -----------------------------
-name = st.text_input("👤 Enter Name")
-age = st.number_input("🎂 Age", 0, 120)
+st.sidebar.header("👤 Patient Info")
+name = st.sidebar.text_input("Name")
+age = st.sidebar.number_input("Age", 0, 120)
 
-uploaded_file = st.file_uploader("📤 Upload X-ray", type=["jpg","png","jpeg"])
+uploaded_file = st.file_uploader("📤 Upload X-ray")
 
 # -----------------------------
-# MAIN LOGIC
+# MAIN
 # -----------------------------
 if uploaded_file:
     img = Image.open(uploaded_file).convert("RGB")
@@ -115,7 +122,6 @@ if uploaded_file:
 
     arr = np.expand_dims(np.array(img_resized)/255, axis=0).astype('float32')
 
-    # Prediction
     interpreter.set_tensor(input_details[0]['index'], arr)
     interpreter.invoke()
     preds = interpreter.get_tensor(output_details[0]['index'])
@@ -124,14 +130,12 @@ if uploaded_file:
     conf = np.max(preds)*100
 
     # -----------------------------
-    # RESULT CARD
+    # METRICS
     # -----------------------------
-    st.markdown(f"""
-    <div class="card">
-        <div class="result">🧠 {disease}</div>
-        <p>Confidence: {conf:.2f}%</p>
-    </div>
-    """, unsafe_allow_html=True)
+    col1, col2 = st.columns(2)
+
+    col1.metric("🧠 Disease", disease)
+    col2.metric("📊 Confidence", f"{conf:.2f}%")
 
     # -----------------------------
     # IMAGE + GRAPH
@@ -140,7 +144,7 @@ if uploaded_file:
 
     with col1:
         st.markdown("<div class='card'>", unsafe_allow_html=True)
-        st.image(img, caption="Uploaded X-ray")
+        st.image(img)
         st.markdown("</div>", unsafe_allow_html=True)
 
     with col2:
@@ -151,9 +155,9 @@ if uploaded_file:
         st.markdown("</div>", unsafe_allow_html=True)
 
     # -----------------------------
-    # HOSPITAL SUGGESTION
+    # HOSPITALS GRID
     # -----------------------------
-    st.markdown("## 🏥 Recommended Hospitals")
+    st.markdown("## 🏥 Nearby Hospitals")
 
     city = st.text_input("📍 Enter your city")
 
@@ -161,42 +165,41 @@ if uploaded_file:
         hospitals = HOSPITALS.get(city.title())
 
         if hospitals:
-            for h in hospitals:
-                rating = get_rating()
-                link = get_maps_link(h, city)
+            cols = st.columns(2)
 
-                st.markdown(f"""
-                <div class="card">
-                    <h4>🏥 {h}</h4>
-                    <p>⭐ Rating: {rating} / 5</p>
-                    <a href="{link}" target="_blank">📍 View on Google Maps</a>
-                </div>
-                """, unsafe_allow_html=True)
+            for i, h in enumerate(hospitals):
+                with cols[i % 2]:
+                    rating = get_rating()
+                    link = get_maps_link(h, city)
+
+                    st.markdown(f"""
+                    <div class="card">
+                        <h4>{h}</h4>
+                        ⭐ {rating}/5 <br>
+                        <a href="{link}" target="_blank">📍 View Map</a>
+                    </div>
+                    """, unsafe_allow_html=True)
         else:
-            st.warning("No hospitals found for this city")
+            st.warning("No hospitals found")
 
     # -----------------------------
-    # PDF GENERATION
+    # PDF
     # -----------------------------
     if name:
-        file = f"/tmp/report_{name}.pdf"
+        file = f"/tmp/report.pdf"
         doc = SimpleDocTemplate(file, pagesize=A4)
         styles = getSampleStyleSheet()
 
-        elements = []
-        elements.append(Paragraph("AI MEDICAL REPORT", styles["Title"]))
-        elements.append(Spacer(1, 20))
-        elements.append(Paragraph(f"Name: {name}", styles["Normal"]))
-        elements.append(Paragraph(f"Age: {age}", styles["Normal"]))
-        elements.append(Paragraph(f"Disease: {disease}", styles["Normal"]))
-        elements.append(Paragraph(f"Confidence: {conf:.2f}%", styles["Normal"]))
+        elements = [
+            Paragraph("AI MEDICAL REPORT", styles["Title"]),
+            Spacer(1, 20),
+            Paragraph(f"Name: {name}", styles["Normal"]),
+            Paragraph(f"Age: {age}", styles["Normal"]),
+            Paragraph(f"Disease: {disease}", styles["Normal"]),
+            Paragraph(f"Confidence: {conf:.2f}%", styles["Normal"]),
+        ]
 
         doc.build(elements)
 
         with open(file, "rb") as f:
-            st.download_button(
-                "📄 Download Medical Report",
-                data=f,
-                file_name="report.pdf",
-                use_container_width=True
-            )
+            st.download_button("📄 Download Report", f)
