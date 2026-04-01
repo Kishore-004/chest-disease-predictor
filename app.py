@@ -92,7 +92,7 @@ def load_model():
     return interpreter
 
 # -----------------------------
-# LOAD GRADCAM MODEL (ON DEMAND)
+# LOAD GRADCAM MODEL (SAFE)
 # -----------------------------
 @st.cache_resource
 def load_gradcam_model():
@@ -121,7 +121,7 @@ def symptom_score(disease, symptoms):
     return len(match) / (len(SYMPTOM_MAP.get(disease, [])) + 1e-5)
 
 # -----------------------------
-# GRADCAM FUNCTION
+# GRADCAM FUNCTION (FIXED)
 # -----------------------------
 def generate_gradcam(image, model):
     last_conv_layer = None
@@ -142,7 +142,10 @@ def generate_gradcam(image, model):
     with tf.GradientTape() as tape:
         conv_outputs, predictions = grad_model(image)
         class_idx = tf.argmax(predictions[0])
-        loss = predictions[:, class_idx]
+        class_idx = tf.cast(class_idx, tf.int32)
+
+        # 🔥 FIXED LINE
+        loss = tf.gather(predictions[0], class_idx)
 
     grads = tape.gradient(loss, conv_outputs)
     pooled_grads = tf.reduce_mean(grads, axis=(0,1,2))
@@ -179,12 +182,11 @@ if uploaded_file:
 
     arr = np.expand_dims(np.array(img_resized)/255, axis=0).astype('float32')
 
-    # TFLite prediction
+    # Prediction
     interpreter.set_tensor(input_details[0]['index'], arr)
     interpreter.invoke()
     preds = interpreter.get_tensor(output_details[0]['index'])
 
-    # Combine with symptoms
     model_scores = preds[0]
     final_scores = []
 
@@ -197,12 +199,10 @@ if uploaded_file:
     disease = CLASS_NAMES[np.argmax(final_scores)]
     conf = np.max(final_scores) * 100
 
-    # Metrics
     col1, col2 = st.columns(2)
     col1.metric("🧠 Disease", disease)
     col2.metric("📊 Confidence", f"{conf:.2f}%")
 
-    # Image + graph
     col1, col2 = st.columns(2)
 
     with col1:
