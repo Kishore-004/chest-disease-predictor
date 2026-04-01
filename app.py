@@ -13,6 +13,13 @@ from reportlab.lib.pagesizes import A4
 # ---------------- CONFIG ----------------
 st.set_page_config(page_title="AI Healthcare", layout="wide")
 
+# ✅ TITLE ADDED (ONLY CHANGE)
+st.markdown("""
+<h1 style='text-align: center; color: #1f77b4;'>
+🩺 AI Powered Chest Disease Prediction and Hospital Suggestion
+</h1>
+""", unsafe_allow_html=True)
+
 MODEL_PATH = "model.tflite"
 FILE_ID = "1CBdRBXsze5YgdbRnC8H3GYtqLlydeF-j"
 
@@ -76,7 +83,6 @@ def generate_pdf(name, age, gender, symptoms, disease, conf, city):
     content.append(Paragraph("<b>AI Healthcare Diagnostic Report</b>", styles["Title"]))
     content.append(Spacer(1,10))
 
-    # Patient details
     content.append(Paragraph("<b>Patient Details</b>", styles["Heading2"]))
     content.append(Paragraph(f"Name: {name}", styles["Normal"]))
     content.append(Paragraph(f"Age: {age}", styles["Normal"]))
@@ -84,19 +90,16 @@ def generate_pdf(name, age, gender, symptoms, disease, conf, city):
     content.append(Paragraph(f"Symptoms: {', '.join(symptoms)}", styles["Normal"]))
     content.append(Spacer(1,10))
 
-    # Images
     if os.path.exists("xray.png") and os.path.exists("gradcam.png"):
         content.append(RLImage("xray.png", width=250, height=250))
         content.append(RLImage("gradcam.png", width=250, height=250))
 
     content.append(Spacer(1,10))
 
-    # Disease explanation
     content.append(Paragraph("<b>Disease Information</b>", styles["Heading2"]))
     content.append(Paragraph(DISEASE_DETAILS[disease], styles["Normal"]))
     content.append(Spacer(1,10))
 
-    # Hospitals
     content.append(Paragraph("<b>Recommended Hospitals</b>", styles["Heading2"]))
     if city in HOSPITALS:
         for h in HOSPITALS[city]:
@@ -125,7 +128,7 @@ interpreter = load_model()
 input_details = interpreter.get_input_details()
 output_details = interpreter.get_output_details()
 
-# ---------------- SIDEBAR (UNCHANGED) ----------------
+# ---------------- SIDEBAR ----------------
 st.sidebar.header("Patient Info")
 name = st.sidebar.text_input("Name")
 age = st.sidebar.number_input("Age",0,120)
@@ -148,7 +151,6 @@ if uploaded:
     disease = CLASS_NAMES[np.argmax(preds[0])]
     conf = np.max(preds[0])*100
 
-    # 🔥 Improved UI
     st.markdown(f'<div class="highlight">🧠 Predicted Disease: {disease} ({conf:.2f}%)</div>', unsafe_allow_html=True)
 
     col1,col2 = st.columns(2)
@@ -226,7 +228,7 @@ if uploaded:
                 </div>
                 """, unsafe_allow_html=True)
 
-    # -------- PDF DOWNLOAD --------
+    # -------- PDF --------
     if st.button("Download Report"):
         pdf = generate_pdf(name, age, gender, symptoms, disease, conf, city)
         with open(pdf, "rb") as f:
