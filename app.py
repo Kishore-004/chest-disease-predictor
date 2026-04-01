@@ -69,18 +69,34 @@ SYMPTOM_MAP = {
 }
 
 # -----------------------------
-# HOSPITALS
+# HOSPITALS + SPECIALISTS
 # -----------------------------
 HOSPITALS = {
-    "Chennai": ["Apollo Hospital", "MIOT International", "Fortis Malar"],
-    "Madurai": ["Meenakshi Mission Hospital", "Apollo Specialty"],
-    "Coimbatore": ["KG Hospital", "Ganga Hospital", "PSG Hospitals"],
-    "Salem": ["Gokulam Hospital", "Vinayaka Mission"],
-    "Trichy": ["Kauvery Hospital", "Apollo Trichy"]
+    "Chennai": [
+        {"name": "Apollo Hospital", "specialist": "Dr. Ramesh Kumar (Pulmonologist)"},
+        {"name": "MIOT International", "specialist": "Dr. Priya Sharma (Chest Specialist)"},
+        {"name": "Fortis Malar", "specialist": "Dr. Arjun Singh (Respiratory Expert)"}
+    ],
+    "Madurai": [
+        {"name": "Meenakshi Mission Hospital", "specialist": "Dr. Karthik (Pulmonologist)"},
+        {"name": "Apollo Specialty", "specialist": "Dr. Lakshmi (Chest Physician)"}
+    ],
+    "Coimbatore": [
+        {"name": "KG Hospital", "specialist": "Dr. Vignesh (Pulmonologist)"},
+        {"name": "Ganga Hospital", "specialist": "Dr. Suresh (Respiratory Specialist)"}
+    ],
+    "Salem": [
+        {"name": "Gokulam Hospital", "specialist": "Dr. Naveen (Pulmonologist)"},
+        {"name": "Vinayaka Mission", "specialist": "Dr. Deepak (Chest Specialist)"}
+    ],
+    "Trichy": [
+        {"name": "Kauvery Hospital", "specialist": "Dr. Mohan (Pulmonologist)"},
+        {"name": "Apollo Trichy", "specialist": "Dr. Anand (Respiratory Specialist)"}
+    ]
 }
 
 # -----------------------------
-# LOAD TFLITE MODEL
+# LOAD MODELS
 # -----------------------------
 @st.cache_resource
 def load_model():
@@ -91,16 +107,10 @@ def load_model():
     interpreter.allocate_tensors()
     return interpreter
 
-# -----------------------------
-# LOAD GRADCAM MODEL
-# -----------------------------
 @st.cache_resource
 def load_gradcam_model():
     if not os.path.exists(KERAS_MODEL_PATH):
-        gdown.download(
-            f"https://drive.google.com/uc?id={KERAS_FILE_ID}",
-            KERAS_MODEL_PATH
-        )
+        gdown.download(f"https://drive.google.com/uc?id={KERAS_FILE_ID}", KERAS_MODEL_PATH)
     return tf.keras.models.load_model(KERAS_MODEL_PATH)
 
 interpreter = load_model()
@@ -120,19 +130,12 @@ def symptom_score(disease, symptoms):
     match = set(symptoms).intersection(SYMPTOM_MAP.get(disease, []))
     return len(match) / (len(SYMPTOM_MAP.get(disease, [])) + 1e-5)
 
-# -----------------------------
-# GRADCAM FUNCTION
-# -----------------------------
 def generate_gradcam(image, model):
     last_conv_layer = None
-
     for layer in reversed(model.layers):
         if "conv" in layer.name:
             last_conv_layer = layer.name
             break
-
-    if last_conv_layer is None:
-        raise ValueError("No convolution layer found")
 
     grad_model = tf.keras.models.Model(
         inputs=model.inputs,
@@ -180,7 +183,6 @@ if uploaded_file:
 
     arr = np.expand_dims(np.array(img_resized)/255, axis=0).astype('float32')
 
-    # Prediction
     interpreter.set_tensor(input_details[0]['index'], arr)
     interpreter.invoke()
     preds = interpreter.get_tensor(output_details[0]['index'])
@@ -204,48 +206,40 @@ if uploaded_file:
     col1, col2 = st.columns(2)
 
     with col1:
-        st.markdown("<div class='card'>", unsafe_allow_html=True)
         st.image(img)
-        st.markdown("</div>", unsafe_allow_html=True)
 
     with col2:
-        st.markdown("<div class='card'>", unsafe_allow_html=True)
         fig, ax = plt.subplots()
         ax.bar(CLASS_NAMES, final_scores)
         st.pyplot(fig)
-        st.markdown("</div>", unsafe_allow_html=True)
 
     # -----------------------------
-    # 🔥 IMPROVED GRADCAM
+    # GRADCAM
     # -----------------------------
     st.markdown("## 🔍 Explain Prediction")
 
     if st.button("Show Affected Lung Area"):
-        with st.spinner("Generating heatmap..."):
-            grad_model = load_gradcam_model()
-            heatmap = generate_gradcam(arr, grad_model)
+        grad_model = load_gradcam_model()
+        heatmap = generate_gradcam(arr, grad_model)
 
-            heatmap = cv2.resize(heatmap, (224,224))
-            heatmap = heatmap / (np.max(heatmap) + 1e-8)
+        heatmap = cv2.resize(heatmap, (224,224))
+        heatmap = heatmap / (np.max(heatmap) + 1e-8)
 
-            # 🔥 THRESHOLD (KEY FIX)
-            threshold = 0.6
-            heatmap[heatmap < threshold] = 0
+        threshold = 0.6
+        heatmap[heatmap < threshold] = 0
 
-            heatmap = np.uint8(255 * heatmap)
-            heatmap = cv2.applyColorMap(heatmap, cv2.COLORMAP_JET)
+        heatmap = np.uint8(255 * heatmap)
+        heatmap = cv2.applyColorMap(heatmap, cv2.COLORMAP_JET)
 
-            # 🔥 STRONG OVERLAY
-            overlay = cv2.addWeighted(np.array(img_resized), 0.6, heatmap, 0.7, 0)
-
-            st.image(overlay, caption="🔥 High Confidence Affected Area")
+        overlay = cv2.addWeighted(np.array(img_resized), 0.6, heatmap, 0.7, 0)
+        st.image(overlay, caption="🔥 Affected Region")
 
     # -----------------------------
     # HOSPITALS
     # -----------------------------
     st.markdown("## 🏥 Nearby Hospitals")
 
-    city = st.text_input("📍 Enter your city")
+    city = st.text_input("Enter your city")
 
     if city:
         hospitals = HOSPITALS.get(city.title())
@@ -255,12 +249,13 @@ if uploaded_file:
             for i, h in enumerate(hospitals):
                 with cols[i % 2]:
                     rating = get_rating()
-                    link = get_maps_link(h, city)
+                    link = get_maps_link(h["name"], city)
 
                     st.markdown(f"""
                     <div class="card">
-                        <h4>{h}</h4>
-                        ⭐ {rating}/5 <br>
+                        <h4>🏥 {h["name"]}</h4>
+                        👨‍⚕️ {h["specialist"]}<br>
+                        ⭐ {rating}/5<br>
                         <a href="{link}" target="_blank">📍 View Map</a>
                     </div>
                     """, unsafe_allow_html=True)
