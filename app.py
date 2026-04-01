@@ -1,7 +1,7 @@
 import streamlit as st
 import numpy as np
 from PIL import Image
-import gdown, os
+import gdown, os, cv2
 import matplotlib.pyplot as plt
 import tensorflow as tf
 import random
@@ -44,19 +44,22 @@ body {{
 # HEADER
 # -----------------------------
 st.markdown("<h1 style='text-align:center;'>🩺 AI Healthcare Dashboard</h1>", unsafe_allow_html=True)
-st.markdown("<p style='text-align:center;'>Disease Detection + Smart Diagnosis</p>", unsafe_allow_html=True)
+st.markdown("<p style='text-align:center;'>Disease Detection + Explainable AI</p>", unsafe_allow_html=True)
 st.markdown("---")
 
 # -----------------------------
-# CONFIG
+# MODEL CONFIG
 # -----------------------------
 MODEL_PATH = "model.tflite"
 FILE_ID = "1CBdRBXsze5YgdbRnC8H3GYtqLlydeF-j"
 
+KERAS_MODEL_PATH = "model.keras"
+KERAS_FILE_ID = "1GRO5EwB9PDX61G1lZfIHChvCK7JkYe6v"
+
 CLASS_NAMES = ['COVID19','NORMAL','PNEUMONIA','TURBERCULOSIS']
 
 # -----------------------------
-# SYMPTOMS MAP
+# SYMPTOMS
 # -----------------------------
 SYMPTOM_MAP = {
     "COVID19": ["Fever", "Cough", "Fatigue"],
@@ -66,18 +69,18 @@ SYMPTOM_MAP = {
 }
 
 # -----------------------------
-# HOSPITAL DATA
+# HOSPITALS
 # -----------------------------
 HOSPITALS = {
     "Chennai": ["Apollo Hospital", "MIOT International", "Fortis Malar"],
     "Madurai": ["Meenakshi Mission Hospital", "Apollo Specialty"],
     "Coimbatore": ["KG Hospital", "Ganga Hospital", "PSG Hospitals"],
     "Salem": ["Gokulam Hospital", "Vinayaka Mission"],
-    "Trichy": ["Kauvery Hospital", "Apollo Trichy"],
+    "Trichy": ["Kauvery Hospital", "Apollo Trichy"]
 }
 
 # -----------------------------
-# LOAD MODEL
+# LOAD TFLITE MODEL
 # -----------------------------
 @st.cache_resource
 def load_model():
@@ -87,6 +90,18 @@ def load_model():
     interpreter = tf.lite.Interpreter(model_path=MODEL_PATH)
     interpreter.allocate_tensors()
     return interpreter
+
+# -----------------------------
+# LOAD GRADCAM MODEL (ON DEMAND)
+# -----------------------------
+@st.cache_resource
+def load_gradcam_model():
+    if not os.path.exists(KERAS_MODEL_PATH):
+        gdown.download(
+            f"https://drive.google.com/uc?id={KERAS_FILE_ID}",
+            KERAS_MODEL_PATH
+        )
+    return tf.keras.models.load_model(KERAS_MODEL_PATH)
 
 interpreter = load_model()
 input_details = interpreter.get_input_details()
@@ -102,13 +117,47 @@ def get_rating():
     return round(random.uniform(3.5, 5.0), 1)
 
 def symptom_score(disease, symptoms):
-    if disease not in SYMPTOM_MAP:
-        return 0
-    match = set(symptoms).intersection(SYMPTOM_MAP[disease])
-    return len(match) / (len(SYMPTOM_MAP[disease]) + 1e-5)
+    match = set(symptoms).intersection(SYMPTOM_MAP.get(disease, []))
+    return len(match) / (len(SYMPTOM_MAP.get(disease, [])) + 1e-5)
 
 # -----------------------------
-# SIDEBAR INPUT
+# GRADCAM FUNCTION
+# -----------------------------
+def generate_gradcam(image, model):
+    last_conv_layer = None
+
+    for layer in reversed(model.layers):
+        if "conv" in layer.name:
+            last_conv_layer = layer.name
+            break
+
+    if last_conv_layer is None:
+        raise ValueError("No convolution layer found")
+
+    grad_model = tf.keras.models.Model(
+        inputs=model.inputs,
+        outputs=[model.get_layer(last_conv_layer).output, model.output]
+    )
+
+    with tf.GradientTape() as tape:
+        conv_outputs, predictions = grad_model(image)
+        class_idx = tf.argmax(predictions[0])
+        loss = predictions[:, class_idx]
+
+    grads = tape.gradient(loss, conv_outputs)
+    pooled_grads = tf.reduce_mean(grads, axis=(0,1,2))
+
+    conv_outputs = conv_outputs[0]
+    heatmap = conv_outputs * pooled_grads
+    heatmap = tf.reduce_sum(heatmap, axis=-1)
+
+    heatmap = np.maximum(heatmap, 0)
+    heatmap /= (np.max(heatmap) + 1e-8)
+
+    return heatmap
+
+# -----------------------------
+# SIDEBAR
 # -----------------------------
 st.sidebar.header("👤 Patient Info")
 name = st.sidebar.text_input("Name")
@@ -116,7 +165,7 @@ age = st.sidebar.number_input("Age", 0, 120)
 
 symptoms = st.sidebar.multiselect(
     "🤒 Symptoms",
-    ["Fever", "Cough", "Chest Pain", "Breathing Difficulty", "Fatigue", "Weight Loss", "Night Sweats"]
+    ["Fever","Cough","Chest Pain","Breathing Difficulty","Fatigue","Weight Loss","Night Sweats"]
 )
 
 uploaded_file = st.file_uploader("📤 Upload X-ray")
@@ -130,20 +179,17 @@ if uploaded_file:
 
     arr = np.expand_dims(np.array(img_resized)/255, axis=0).astype('float32')
 
+    # TFLite prediction
     interpreter.set_tensor(input_details[0]['index'], arr)
     interpreter.invoke()
     preds = interpreter.get_tensor(output_details[0]['index'])
 
-    # -----------------------------
-    # COMBINED PREDICTION
-    # -----------------------------
+    # Combine with symptoms
     model_scores = preds[0]
     final_scores = []
 
     for i, d in enumerate(CLASS_NAMES):
-        img_score = model_scores[i]
-        sym_score = symptom_score(d, symptoms)
-        final = (0.7 * img_score) + (0.3 * sym_score)
+        final = (0.7 * model_scores[i]) + (0.3 * symptom_score(d, symptoms))
         final_scores.append(final)
 
     final_scores = np.array(final_scores)
@@ -151,16 +197,12 @@ if uploaded_file:
     disease = CLASS_NAMES[np.argmax(final_scores)]
     conf = np.max(final_scores) * 100
 
-    # -----------------------------
-    # METRICS
-    # -----------------------------
+    # Metrics
     col1, col2 = st.columns(2)
     col1.metric("🧠 Disease", disease)
     col2.metric("📊 Confidence", f"{conf:.2f}%")
 
-    # -----------------------------
-    # IMAGE + GRAPH
-    # -----------------------------
+    # Image + graph
     col1, col2 = st.columns(2)
 
     with col1:
@@ -174,6 +216,25 @@ if uploaded_file:
         ax.bar(CLASS_NAMES, final_scores)
         st.pyplot(fig)
         st.markdown("</div>", unsafe_allow_html=True)
+
+    # -----------------------------
+    # GRADCAM BUTTON
+    # -----------------------------
+    st.markdown("## 🔍 Explain Prediction")
+
+    if st.button("Show Affected Lung Area"):
+        with st.spinner("Generating heatmap..."):
+            grad_model = load_gradcam_model()
+            heatmap = generate_gradcam(arr, grad_model)
+
+            heatmap = cv2.resize(heatmap, (224,224))
+            heatmap = np.uint8(255 * heatmap)
+            heatmap = cv2.applyColorMap(heatmap, cv2.COLORMAP_JET)
+
+            overlay = heatmap * 0.4 + np.array(img_resized)
+            overlay = np.uint8(overlay)
+
+            st.image(overlay, caption="🔥 Affected Lung Region")
 
     # -----------------------------
     # HOSPITALS
@@ -206,7 +267,7 @@ if uploaded_file:
     # PDF
     # -----------------------------
     if name:
-        file = f"/tmp/report.pdf"
+        file = "/tmp/report.pdf"
         doc = SimpleDocTemplate(file, pagesize=A4)
         styles = getSampleStyleSheet()
 
