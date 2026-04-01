@@ -33,15 +33,17 @@ padding:15px;border-radius:12px;color:white;text-align:center;font-weight:bold;}
 
 # ---------------- HEADER ----------------
 st.markdown('<div class="title">🩺 AI Healthcare System</div>', unsafe_allow_html=True)
-st.markdown('<div class="subtitle">AI-powered Disease Detection & Smart Analysis</div>', unsafe_allow_html=True)
+st.markdown('<div class="subtitle">AI + Symptom Based Disease Prediction</div>', unsafe_allow_html=True)
 
-# ---------------- DISEASE INFO ----------------
-DISEASE_INFO = {
-    "TURBERCULOSIS":{"sym":["cough","weight loss","fatigue"]},
-    "PNEUMONIA":{"sym":["fever","cough","chest pain"]},
-    "COVID19":{"sym":["fever","cough","breathing"]},
-    "NORMAL":{"sym":[]}
+# ---------------- SYMPTOMS DATABASE ----------------
+SYMPTOMS_DB = {
+    "COVID19": ["Fever","Dry Cough","Breathing Difficulty","Fatigue"],
+    "PNEUMONIA": ["Fever","Chest Pain","Cough","Shortness of Breath"],
+    "TURBERCULOSIS": ["Chronic Cough","Weight Loss","Night Sweats","Fatigue"],
+    "NORMAL": []
 }
+
+ALL_SYMPTOMS = sorted(list(set(sum(SYMPTOMS_DB.values(), []))))
 
 # ---------------- HOSPITALS ----------------
 HOSPITALS = {
@@ -78,15 +80,20 @@ output_details = interpreter.get_output_details()
 st.sidebar.header("👤 Patient Details")
 name = st.sidebar.text_input("Name")
 age = st.sidebar.number_input("Age",0,120)
-symptoms_input = st.sidebar.text_area("Enter Symptoms (comma separated)")
+
+# ✅ NEW: MULTISELECT SYMPTOMS
+selected_symptoms = st.sidebar.multiselect(
+    "Select Symptoms",
+    ALL_SYMPTOMS
+)
+
 uploaded = st.sidebar.file_uploader("Upload X-ray")
 
-# ---------------- SYMPTOM MATCH ----------------
-def match_symptoms(user_symptoms):
+# ---------------- SYMPTOM MATCH FUNCTION ----------------
+def predict_from_symptoms(selected):
     scores = {}
-    for disease, data in DISEASE_INFO.items():
-        match = len(set(user_symptoms) & set(data["sym"]))
-        scores[disease] = match
+    for disease, sym_list in SYMPTOMS_DB.items():
+        scores[disease] = len(set(selected) & set(sym_list))
     return max(scores, key=scores.get)
 
 # ---------------- MAIN ----------------
@@ -102,19 +109,24 @@ if uploaded:
     ai_disease = CLASS_NAMES[np.argmax(preds[0])]
     conf = np.max(preds[0])*100
 
-    # Symptom prediction
-    if symptoms_input:
-        user_symptoms = [s.strip().lower() for s in symptoms_input.split(",")]
-        symptom_disease = match_symptoms(user_symptoms)
+    # Symptom-based prediction
+    symptom_disease = predict_from_symptoms(selected_symptoms) if selected_symptoms else "Not Selected"
+
+    # -------- FINAL DECISION --------
+    if selected_symptoms:
+        if ai_disease == symptom_disease:
+            final_decision = f"✅ Strong Match: {ai_disease}"
+        else:
+            final_decision = f"⚠️ Conflict: AI → {ai_disease}, Symptoms → {symptom_disease}"
     else:
-        symptom_disease = "Not provided"
+        final_decision = ai_disease
 
     # -------- METRICS --------
     colA,colB,colC = st.columns(3)
 
     colA.markdown(f'<div class="metric-card">🧠 AI Prediction<br><br>{ai_disease}</div>', unsafe_allow_html=True)
     colB.markdown(f'<div class="metric-card">📊 Confidence<br><br>{conf:.2f}%</div>', unsafe_allow_html=True)
-    colC.markdown(f'<div class="metric-card">🤒 Symptom Match<br><br>{symptom_disease}</div>', unsafe_allow_html=True)
+    colC.markdown(f'<div class="metric-card">🤒 Symptoms Result<br><br>{symptom_disease}</div>', unsafe_allow_html=True)
 
     # -------- LAYOUT --------
     col1,col2 = st.columns([1,1])
@@ -131,19 +143,21 @@ if uploaded:
 
     with col2:
         st.markdown('<div class="card">', unsafe_allow_html=True)
-        st.markdown("### 📖 AI + Symptom Analysis")
+        st.markdown("### 📖 Final Analysis")
 
         st.markdown(f"""
         <div class="disease-text">
-        AI predicts <b>{ai_disease}</b> with {conf:.2f}% confidence.<br><br>
-        Based on symptoms, possible condition: <b>{symptom_disease}</b>.<br><br>
-        <b>Recommendation:</b> Please consult a doctor for confirmation.
+        <b>AI Prediction:</b> {ai_disease} ({conf:.2f}%)<br><br>
+        <b>Symptom-Based Prediction:</b> {symptom_disease}<br><br>
+        <b>Final Decision:</b> {final_decision}<br><br>
+        <b>Selected Symptoms:</b> {", ".join(selected_symptoms) if selected_symptoms else "None"}<br><br>
+        <b>Advice:</b> Consult a medical professional for confirmation.
         </div>
         """, unsafe_allow_html=True)
 
         st.markdown('</div>', unsafe_allow_html=True)
 
-    # -------- GRADCAM --------
+    # -------- GRADCAM (same stable version) --------
     if st.button("🔥 Show Affected Area"):
         try:
             model = load_grad_model()
@@ -169,10 +183,9 @@ if uploaded:
                     loss = predictions[0][tf.argmax(predictions[0])]
 
                 grads = tape.gradient(loss, conv_outputs)
-
                 pooled_grads = tf.reduce_mean(grads, axis=(0,1,2))
-                conv_outputs = conv_outputs[0]
 
+                conv_outputs = conv_outputs[0]
                 heatmap = conv_outputs @ pooled_grads[..., tf.newaxis]
                 heatmap = tf.squeeze(heatmap)
 
@@ -187,7 +200,7 @@ if uploaded:
                 heatmap = cv2.applyColorMap(heatmap, cv2.COLORMAP_JET)
 
                 overlay = cv2.addWeighted(np.array(img_resized),0.6,heatmap,0.4,0)
-                st.image(overlay, caption="🔥 Affected Area", use_container_width=True)
+                st.image(overlay, caption="🔥 Affected Region", use_container_width=True)
 
         except Exception as e:
             st.error(f"GradCAM Error: {e}")
@@ -208,5 +221,3 @@ if uploaded:
                 <a href="{maps_link(h['name'], city)}">📍 Map</a>
                 </div>
                 """, unsafe_allow_html=True)
-        else:
-            st.warning("No hospitals found")
