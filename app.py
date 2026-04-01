@@ -6,9 +6,6 @@ import tensorflow as tf
 import random
 import matplotlib.pyplot as plt
 
-from reportlab.platypus import SimpleDocTemplate, Paragraph
-from reportlab.lib.styles import getSampleStyleSheet
-
 # ---------------- CONFIG ----------------
 st.set_page_config(page_title="AI Healthcare", layout="wide")
 
@@ -20,66 +17,90 @@ KERAS_ID = "1GRO5EwB9PDX61G1lZfIHChvCK7JkYe6v"
 
 CLASS_NAMES = ['COVID19','NORMAL','PNEUMONIA','TURBERCULOSIS']
 
-# ---------------- STYLE ----------------
+# ---------------- MODERN UI STYLE ----------------
 st.markdown("""
 <style>
-html, body {
-    font-size:16px;
-    font-weight:600;
+.main {
+    background: linear-gradient(to right, #eef2f3, #ffffff);
 }
+
 .card {
-    background:white;
-    padding:20px;
-    border-radius:12px;
-    margin-bottom:15px;
+    background: white;
+    padding: 18px;
+    border-radius: 16px;
+    box-shadow: 0px 4px 12px rgba(0,0,0,0.08);
+    margin-bottom: 15px;
+}
+
+.metric-card {
+    background: linear-gradient(135deg, #4facfe, #00f2fe);
+    padding: 15px;
+    border-radius: 12px;
+    color: white;
+    font-weight: bold;
+    text-align:center;
+}
+
+.title {
+    font-size: 32px;
+    font-weight: 800;
+}
+
+.subtitle {
+    font-size: 15px;
+    color: gray;
+    margin-bottom: 20px;
+}
+
+.disease-text {
+    font-size: 14px;
+    font-weight: 600;
+    line-height: 1.7;
 }
 </style>
 """, unsafe_allow_html=True)
 
 # ---------------- HEADER ----------------
-st.title("🩺 AI Healthcare System")
-st.write("Disease Detection + Explanation + Hospital Suggestion")
+st.markdown('<div class="title">🩺 AI Healthcare System</div>', unsafe_allow_html=True)
+st.markdown('<div class="subtitle">AI-powered Disease Detection & Smart Hospital Recommendation</div>', unsafe_allow_html=True)
 
 # ---------------- DISEASE INFO ----------------
 DISEASE_INFO = {
     "TURBERCULOSIS": {
-        "desc": "Tuberculosis is a serious lung infection caused by bacteria that spreads through air.",
-        "sym": "long-term cough, weight loss, and night sweats",
-        "cause": "TB bacteria (Mycobacterium tuberculosis)",
-        "treat": "6–9 months of antibiotics",
-        "prec": "early diagnosis and completing the full treatment course"
+        "desc": "Tuberculosis is a serious infectious disease that mainly affects the lungs and spreads through air.",
+        "sym": "persistent cough, weight loss, night sweats, fatigue",
+        "cause": "Mycobacterium tuberculosis bacteria",
+        "treat": "long-term antibiotic therapy (6–9 months)",
+        "prec": "early diagnosis, proper medication, avoiding close contact"
     },
     "PNEUMONIA": {
-        "desc": "Pneumonia is a lung infection where air sacs fill with fluid.",
-        "sym": "fever, cough, and chest pain",
-        "cause": "bacteria or viruses",
-        "treat": "antibiotics, rest, and hydration",
-        "prec": "vaccination and maintaining hygiene"
+        "desc": "Pneumonia causes inflammation in lung air sacs, often filled with fluid or pus.",
+        "sym": "fever, cough, breathing difficulty, chest pain",
+        "cause": "bacteria, viruses, or fungi",
+        "treat": "antibiotics, rest, oxygen support if needed",
+        "prec": "vaccination, hygiene, avoiding smoking"
     },
     "COVID19": {
-        "desc": "COVID-19 is a viral respiratory infection affecting the lungs.",
-        "sym": "fever, cough, and breathing difficulties",
-        "cause": "coronavirus",
-        "treat": "rest, fluids, and supportive care",
-        "prec": "mask usage, vaccination, and hygiene"
+        "desc": "COVID-19 is a viral respiratory illness affecting lungs and immune system.",
+        "sym": "fever, dry cough, breathing issues, fatigue",
+        "cause": "SARS-CoV-2 virus",
+        "treat": "supportive care, isolation, oxygen if severe",
+        "prec": "mask, vaccination, distancing"
     },
     "NORMAL": {
-        "desc": "No lung abnormality detected.",
+        "desc": "No abnormalities detected in lungs.",
         "sym": "no symptoms",
-        "cause": "healthy lung condition",
+        "cause": "healthy condition",
         "treat": "not required",
-        "prec": "maintaining a healthy lifestyle"
+        "prec": "maintain healthy lifestyle"
     }
 }
 
 # ---------------- HOSPITALS ----------------
 HOSPITALS = {
     "Chennai": [
-        {"name":"Apollo Hospital","doc":"Dr. Ramesh (Pulmonologist)"},
-        {"name":"MIOT International","doc":"Dr. Priya (Chest Specialist)"}
-    ],
-    "Madurai":[
-        {"name":"Meenakshi Mission","doc":"Dr. Karthik"}
+        {"name":"Apollo Hospital","doc":"Dr. Ramesh"},
+        {"name":"MIOT International","doc":"Dr. Priya"}
     ],
     "Coimbatore":[
         {"name":"KG Hospital","doc":"Dr. Vignesh"},
@@ -91,30 +112,23 @@ def maps_link(name,city):
     return f"https://www.google.com/maps/search/{name}+{city}"
 
 def rating():
-    return round(random.uniform(3.5,5.0),1)
+    return round(random.uniform(3.8,5.0),1)
 
-# ---------------- LOAD MODELS ----------------
+# ---------------- LOAD MODEL ----------------
 @st.cache_resource
-def load_tflite():
+def load_model():
     if not os.path.exists(MODEL_PATH):
         gdown.download(f"https://drive.google.com/uc?id={FILE_ID}", MODEL_PATH)
     model = tf.lite.Interpreter(model_path=MODEL_PATH)
     model.allocate_tensors()
     return model
 
-@st.cache_resource
-def load_grad_model():
-    if not os.path.exists(KERAS_PATH):
-        gdown.download(f"https://drive.google.com/uc?id={KERAS_ID}", KERAS_PATH)
-    return tf.keras.models.load_model(KERAS_PATH)
-
-interpreter = load_tflite()
+interpreter = load_model()
 input_details = interpreter.get_input_details()
 output_details = interpreter.get_output_details()
 
 # ---------------- SIDEBAR ----------------
 st.sidebar.header("👤 Patient Details")
-
 name = st.sidebar.text_input("Name")
 age = st.sidebar.number_input("Age",0,120)
 uploaded = st.sidebar.file_uploader("Upload X-ray")
@@ -132,105 +146,74 @@ if uploaded:
     disease = CLASS_NAMES[np.argmax(preds[0])]
     conf = np.max(preds[0])*100
 
-    st.success(f"🧠 Prediction: {disease}")
-    st.info(f"📊 Confidence: {conf:.2f}%")
+    # ---------------- METRICS ----------------
+    colA, colB = st.columns(2)
 
+    with colA:
+        st.markdown(f'<div class="metric-card">🧠 Prediction<br><br>{disease}</div>', unsafe_allow_html=True)
+
+    with colB:
+        st.markdown(f'<div class="metric-card">📊 Confidence<br><br>{conf:.2f}%</div>', unsafe_allow_html=True)
+
+    # ---------------- MAIN LAYOUT ----------------
     col1, col2 = st.columns([1,1])
 
+    # -------- LEFT: IMAGE + CHART --------
     with col1:
-        st.image(img, caption="X-ray")
+        st.markdown('<div class="card">', unsafe_allow_html=True)
 
-        # ✅ CHART (same size as image)
-        st.subheader("📊 Prediction Chart")
-        fig, ax = plt.subplots(figsize=(4,4))
+        st.image(img, use_container_width=True)
+
+        st.markdown("### 📊 Prediction Distribution")
+
+        fig, ax = plt.subplots(figsize=(3,3))
         ax.bar(CLASS_NAMES, preds[0])
         ax.set_xticklabels(CLASS_NAMES, rotation=45)
+
         st.pyplot(fig)
 
-    # ---------------- PARAGRAPH DETAILS ----------------
+        st.markdown('</div>', unsafe_allow_html=True)
+
+    # -------- RIGHT: DISEASE INFO --------
     info = DISEASE_INFO[disease]
 
     with col2:
-        st.markdown("## 📖 Disease Details")
+        st.markdown('<div class="card">', unsafe_allow_html=True)
+        st.markdown("### 📖 Disease Insights")
 
         st.markdown(f"""
-        <div style="font-size:14px; font-weight:bold; line-height:1.6;">
-        {info['desc']} The common symptoms include {info['sym']}. 
-        This condition is usually caused by {info['cause']}. 
-        The recommended treatment involves {info['treat']}. 
-        To stay safe, it is important to follow precautions such as {info['prec']}.
+        <div class="disease-text">
+        <b>Overview:</b> {info['desc']}<br><br>
+        <b>Symptoms:</b> {info['sym']}<br><br>
+        <b>Causes:</b> {info['cause']}<br><br>
+        <b>Treatment:</b> {info['treat']}<br><br>
+        <b>Precautions:</b> {info['prec']}<br><br>
+        <b>Severity:</b> {"High ⚠️" if disease != "NORMAL" else "None ✅"}
         </div>
         """, unsafe_allow_html=True)
 
-    # ---------------- GRADCAM ----------------
-    if st.button("🔥 Show Affected Area"):
-        model = load_grad_model()
-
-        last_conv = [l.name for l in model.layers if "conv" in l.name][-1]
-
-        grad_model = tf.keras.models.Model(
-            inputs=model.inputs,
-            outputs=[model.get_layer(last_conv).output, model.output]
-        )
-
-        with tf.GradientTape() as tape:
-            conv_outputs, predictions = grad_model(arr)
-            class_idx = tf.argmax(predictions[0])
-            loss = tf.gather(predictions[0], class_idx)
-
-        grads = tape.gradient(loss, conv_outputs)
-        pooled_grads = tf.reduce_mean(grads, axis=(0,1,2))
-
-        conv_outputs = conv_outputs[0]
-        heatmap = conv_outputs * pooled_grads
-        heatmap = tf.reduce_sum(heatmap, axis=-1)
-
-        heatmap = np.maximum(heatmap, 0)
-        heatmap /= (np.max(heatmap) + 1e-8)
-
-        heatmap = cv2.resize(heatmap, (224,224))
-        heatmap[heatmap < 0.6] = 0
-
-        heatmap = np.uint8(255 * heatmap)
-        heatmap = cv2.applyColorMap(heatmap, cv2.COLORMAP_JET)
-
-        overlay = cv2.addWeighted(np.array(img_r), 0.6, heatmap, 0.7, 0)
-
-        st.image(overlay, caption="🔥 Affected Lung Area")
+        st.markdown('</div>', unsafe_allow_html=True)
 
     # ---------------- HOSPITAL ----------------
-    st.markdown("## 🏥 Hospital Suggestions")
-    city = st.text_input("Enter City")
+    st.markdown("## 🏥 Recommended Hospitals")
+
+    city = st.text_input("Enter your city")
 
     if city:
         city_clean = city.strip().title()
 
         if city_clean in HOSPITALS:
-            for h in HOSPITALS[city_clean]:
-                st.markdown(f"""
-                <div class="card">
-                🏥 {h['name']}<br>
-                👨‍⚕️ {h['doc']}<br>
-                ⭐ {rating()}/5<br>
-                <a href="{maps_link(h['name'], city_clean)}" target="_blank">📍 View Map</a>
-                </div>
-                """, unsafe_allow_html=True)
+            cols = st.columns(2)
+
+            for i, h in enumerate(HOSPITALS[city_clean]):
+                with cols[i % 2]:
+                    st.markdown(f"""
+                    <div class="card">
+                    <b>🏥 {h['name']}</b><br><br>
+                    👨‍⚕️ {h['doc']}<br><br>
+                    ⭐ {rating()}/5<br><br>
+                    <a href="{maps_link(h['name'], city_clean)}" target="_blank">📍 Open Map</a>
+                    </div>
+                    """, unsafe_allow_html=True)
         else:
-            st.warning("❌ No hospitals found for this city")
-
-    # ---------------- PDF ----------------
-    if st.button("📄 Download Report"):
-        file = "report.pdf"
-        doc = SimpleDocTemplate(file)
-        styles = getSampleStyleSheet()
-
-        content = [
-            Paragraph(f"Name: {name}", styles["Normal"]),
-            Paragraph(f"Disease: {disease}", styles["Normal"]),
-            Paragraph(f"Confidence: {conf:.2f}%", styles["Normal"])
-        ]
-
-        doc.build(content)
-
-        with open(file,"rb") as f:
-            st.download_button("Download PDF", f)
+            st.warning("No hospitals found")
