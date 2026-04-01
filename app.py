@@ -28,20 +28,24 @@ KERAS_ID = "1GRO5EwB9PDX61G1lZfIHChvCK7JkYe6v"
 
 CLASS_NAMES = ['COVID19','NORMAL','PNEUMONIA','TURBERCULOSIS']
 
-# ---------------- SYMPTOMS LIST ----------------
-SYMPTOMS_LIST = [
-    "Fever", "Dry Cough", "Chronic Cough", "Chest Pain",
-    "Breathing Difficulty", "Shortness of Breath",
-    "Fatigue", "Weight Loss", "Night Sweats"
-]
-
-# ---------------- STYLE ----------------
+# ---------------- GLOBAL FONT FIX ----------------
 st.markdown("""
 <style>
-.card {
-    background:white;padding:18px;border-radius:16px;
-    box-shadow:0px 4px 12px rgba(0,0,0,0.08);margin-bottom:15px;
+html, body, [class*="css"] {
+    font-size:16px !important;
+    font-weight:600 !important;
 }
+
+/* Cards */
+.card {
+    background:white;
+    padding:18px;
+    border-radius:16px;
+    box-shadow:0px 4px 12px rgba(0,0,0,0.08);
+    margin-bottom:15px;
+}
+
+/* Highlight */
 .highlight {
     background: linear-gradient(135deg,#ff758c,#ff7eb3);
     color:white;
@@ -51,8 +55,21 @@ st.markdown("""
     font-weight:bold;
     text-align:center;
 }
+
+/* Sidebar */
+section[data-testid="stSidebar"] {
+    font-size:16px !important;
+    font-weight:600 !important;
+}
 </style>
 """, unsafe_allow_html=True)
+
+# ---------------- SYMPTOMS LIST ----------------
+SYMPTOMS_LIST = [
+    "Fever", "Dry Cough", "Chronic Cough", "Chest Pain",
+    "Breathing Difficulty", "Shortness of Breath",
+    "Fatigue", "Weight Loss", "Night Sweats"
+]
 
 # ---------------- DISEASE DETAILS ----------------
 DISEASE_DETAILS = {
@@ -140,10 +157,7 @@ st.sidebar.header("Patient Info")
 name = st.sidebar.text_input("Name")
 age = st.sidebar.number_input("Age",0,120)
 gender = st.sidebar.selectbox("Gender", ["Male","Female","Other"])
-
-# ✅ UPDATED: MULTISELECT SYMPTOMS
 symptoms = st.sidebar.multiselect("Select Symptoms", SYMPTOMS_LIST)
-
 uploaded = st.sidebar.file_uploader("Upload X-ray")
 
 # ---------------- MAIN ----------------
@@ -167,7 +181,6 @@ if uploaded:
 
     with col1:
         st.image(img, use_container_width=True)
-
         fig, ax = plt.subplots(figsize=(5,4))
         ax.bar(CLASS_NAMES, preds[0])
         plt.tight_layout()
@@ -182,7 +195,6 @@ if uploaded:
     # -------- GRADCAM --------
     if st.button("Show GradCAM"):
         model = load_grad()
-
         for layer in reversed(model.layers):
             if isinstance(layer, tf.keras.layers.Conv2D):
                 last_conv = layer.name
