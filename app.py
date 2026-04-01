@@ -44,31 +44,31 @@ st.write("Disease Detection + Explanation + Hospital Suggestion")
 DISEASE_INFO = {
     "TURBERCULOSIS": {
         "desc": "Tuberculosis is a serious lung infection caused by bacteria that spreads through air.",
-        "sym": "Long-term cough, weight loss, night sweats.",
-        "cause": "TB bacteria (Mycobacterium tuberculosis).",
-        "treat": "6–9 months antibiotics.",
-        "prec": "Early diagnosis and complete treatment."
+        "sym": "long-term cough, weight loss, and night sweats",
+        "cause": "TB bacteria (Mycobacterium tuberculosis)",
+        "treat": "6–9 months of antibiotics",
+        "prec": "early diagnosis and completing the full treatment course"
     },
     "PNEUMONIA": {
         "desc": "Pneumonia is a lung infection where air sacs fill with fluid.",
-        "sym": "Fever, cough, chest pain.",
-        "cause": "Bacteria or virus.",
-        "treat": "Antibiotics and rest.",
-        "prec": "Vaccination and hygiene."
+        "sym": "fever, cough, and chest pain",
+        "cause": "bacteria or viruses",
+        "treat": "antibiotics, rest, and hydration",
+        "prec": "vaccination and maintaining hygiene"
     },
     "COVID19": {
-        "desc": "COVID-19 is a viral respiratory infection affecting lungs.",
-        "sym": "Fever, cough, breathing issues.",
-        "cause": "Coronavirus.",
-        "treat": "Rest and supportive care.",
-        "prec": "Mask and vaccination."
+        "desc": "COVID-19 is a viral respiratory infection affecting the lungs.",
+        "sym": "fever, cough, and breathing difficulties",
+        "cause": "coronavirus",
+        "treat": "rest, fluids, and supportive care",
+        "prec": "mask usage, vaccination, and hygiene"
     },
     "NORMAL": {
         "desc": "No lung abnormality detected.",
-        "sym": "No symptoms.",
-        "cause": "Healthy lungs.",
-        "treat": "Not required.",
-        "prec": "Healthy lifestyle."
+        "sym": "no symptoms",
+        "cause": "healthy lung condition",
+        "treat": "not required",
+        "prec": "maintaining a healthy lifestyle"
     }
 }
 
@@ -135,33 +135,34 @@ if uploaded:
     st.success(f"🧠 Prediction: {disease}")
     st.info(f"📊 Confidence: {conf:.2f}%")
 
-    col1,col2 = st.columns(2)
+    col1, col2 = st.columns([1,1])
 
     with col1:
         st.image(img, caption="X-ray")
 
-    # ---------------- EXPLANATION ----------------
+        # ✅ CHART (same size as image)
+        st.subheader("📊 Prediction Chart")
+        fig, ax = plt.subplots(figsize=(4,4))
+        ax.bar(CLASS_NAMES, preds[0])
+        ax.set_xticklabels(CLASS_NAMES, rotation=45)
+        st.pyplot(fig)
+
+    # ---------------- PARAGRAPH DETAILS ----------------
     info = DISEASE_INFO[disease]
 
     with col2:
         st.markdown("## 📖 Disease Details")
+
         st.markdown(f"""
-        <div class="card">
-        🦠 Description: {info['desc']}<br><br>
-        🤒 Symptoms: {info['sym']}<br><br>
-        🧬 Causes: {info['cause']}<br><br>
-        💊 Treatment: {info['treat']}<br><br>
-        🛡️ Precautions: {info['prec']}
+        <div style="font-size:14px; font-weight:bold; line-height:1.6;">
+        {info['desc']} The common symptoms include {info['sym']}. 
+        This condition is usually caused by {info['cause']}. 
+        The recommended treatment involves {info['treat']}. 
+        To stay safe, it is important to follow precautions such as {info['prec']}.
         </div>
         """, unsafe_allow_html=True)
 
-    # ---------------- CHART ----------------
-    st.subheader("📊 Prediction Chart")
-    fig, ax = plt.subplots()
-    ax.bar(CLASS_NAMES, preds[0])
-    st.pyplot(fig)
-
-    # ---------------- GRADCAM FIXED ----------------
+    # ---------------- GRADCAM ----------------
     if st.button("🔥 Show Affected Area"):
         model = load_grad_model()
 
@@ -174,10 +175,7 @@ if uploaded:
 
         with tf.GradientTape() as tape:
             conv_outputs, predictions = grad_model(arr)
-
             class_idx = tf.argmax(predictions[0])
-            class_idx = tf.cast(class_idx, tf.int32)
-
             loss = tf.gather(predictions[0], class_idx)
 
         grads = tape.gradient(loss, conv_outputs)
@@ -200,7 +198,7 @@ if uploaded:
 
         st.image(overlay, caption="🔥 Affected Lung Area")
 
-    # ---------------- HOSPITAL FIXED ----------------
+    # ---------------- HOSPITAL ----------------
     st.markdown("## 🏥 Hospital Suggestions")
     city = st.text_input("Enter City")
 
