@@ -21,10 +21,21 @@ CLASS_NAMES = ['COVID19','NORMAL','PNEUMONIA','TURBERCULOSIS']
 st.markdown("""
 <style>
 .main {background: linear-gradient(to right, #eef2f3, #ffffff);}
-.card {background:white;padding:18px;border-radius:16px;
-box-shadow:0px 4px 12px rgba(0,0,0,0.08);margin-bottom:15px;}
-.metric-card {background: linear-gradient(135deg,#4facfe,#00f2fe);
-padding:15px;border-radius:12px;color:white;text-align:center;font-weight:bold;}
+.card {
+    background:white;
+    padding:18px;
+    border-radius:16px;
+    box-shadow:0px 4px 12px rgba(0,0,0,0.08);
+    margin-bottom:15px;
+}
+.metric-card {
+    background: linear-gradient(135deg,#4facfe,#00f2fe);
+    padding:15px;
+    border-radius:12px;
+    color:white;
+    text-align:center;
+    font-weight:bold;
+}
 .title {font-size:32px;font-weight:800;}
 .subtitle {color:gray;margin-bottom:20px;}
 .disease-text {font-size:14px;font-weight:600;line-height:1.7;}
@@ -35,7 +46,7 @@ padding:15px;border-radius:12px;color:white;text-align:center;font-weight:bold;}
 st.markdown('<div class="title">🩺 AI Healthcare System</div>', unsafe_allow_html=True)
 st.markdown('<div class="subtitle">AI + Symptom Based Disease Prediction</div>', unsafe_allow_html=True)
 
-# ---------------- SYMPTOMS DATABASE ----------------
+# ---------------- SYMPTOMS ----------------
 SYMPTOMS_DB = {
     "COVID19": ["Fever","Dry Cough","Breathing Difficulty","Fatigue"],
     "PNEUMONIA": ["Fever","Chest Pain","Cough","Shortness of Breath"],
@@ -47,8 +58,18 @@ ALL_SYMPTOMS = sorted(list(set(sum(SYMPTOMS_DB.values(), []))))
 
 # ---------------- HOSPITALS ----------------
 HOSPITALS = {
-    "Chennai":[{"name":"Apollo Hospital","doc":"Dr. Ramesh"}],
-    "Coimbatore":[{"name":"KG Hospital","doc":"Dr. Vignesh"}]
+    "Chennai":[
+        {"name":"Apollo Hospital","doc":"Dr. Ramesh (Pulmonologist)"},
+        {"name":"MIOT International","doc":"Dr. Priya (Chest Specialist)"}
+    ],
+    "Coimbatore":[
+        {"name":"KG Hospital","doc":"Dr. Vignesh (Pulmonologist)"},
+        {"name":"Ganga Hospital","doc":"Dr. Suresh (Respiratory Specialist)"}
+    ],
+    "Madurai":[
+        {"name":"Meenakshi Mission","doc":"Dr. Karthik (Chest Specialist)"},
+        {"name":"Apollo Specialty","doc":"Dr. Anitha (Pulmonologist)"}
+    ]
 }
 
 def maps_link(name,city):
@@ -80,16 +101,10 @@ output_details = interpreter.get_output_details()
 st.sidebar.header("👤 Patient Details")
 name = st.sidebar.text_input("Name")
 age = st.sidebar.number_input("Age",0,120)
-
-# ✅ NEW: MULTISELECT SYMPTOMS
-selected_symptoms = st.sidebar.multiselect(
-    "Select Symptoms",
-    ALL_SYMPTOMS
-)
-
+selected_symptoms = st.sidebar.multiselect("Select Symptoms", ALL_SYMPTOMS)
 uploaded = st.sidebar.file_uploader("Upload X-ray")
 
-# ---------------- SYMPTOM MATCH FUNCTION ----------------
+# ---------------- SYMPTOM MATCH ----------------
 def predict_from_symptoms(selected):
     scores = {}
     for disease, sym_list in SYMPTOMS_DB.items():
@@ -109,10 +124,9 @@ if uploaded:
     ai_disease = CLASS_NAMES[np.argmax(preds[0])]
     conf = np.max(preds[0])*100
 
-    # Symptom-based prediction
     symptom_disease = predict_from_symptoms(selected_symptoms) if selected_symptoms else "Not Selected"
 
-    # -------- FINAL DECISION --------
+    # FINAL DECISION
     if selected_symptoms:
         if ai_disease == symptom_disease:
             final_decision = f"✅ Strong Match: {ai_disease}"
@@ -123,10 +137,9 @@ if uploaded:
 
     # -------- METRICS --------
     colA,colB,colC = st.columns(3)
-
     colA.markdown(f'<div class="metric-card">🧠 AI Prediction<br><br>{ai_disease}</div>', unsafe_allow_html=True)
     colB.markdown(f'<div class="metric-card">📊 Confidence<br><br>{conf:.2f}%</div>', unsafe_allow_html=True)
-    colC.markdown(f'<div class="metric-card">🤒 Symptoms Result<br><br>{symptom_disease}</div>', unsafe_allow_html=True)
+    colC.markdown(f'<div class="metric-card">🤒 Symptoms<br><br>{symptom_disease}</div>', unsafe_allow_html=True)
 
     # -------- LAYOUT --------
     col1,col2 = st.columns([1,1])
@@ -135,8 +148,13 @@ if uploaded:
         st.markdown('<div class="card">', unsafe_allow_html=True)
         st.image(img, use_container_width=True)
 
-        fig, ax = plt.subplots(figsize=(3,3))
+        # FIXED CHART
+        fig, ax = plt.subplots(figsize=(5,4))
         ax.bar(CLASS_NAMES, preds[0])
+        ax.set_xticks(range(len(CLASS_NAMES)))
+        ax.set_xticklabels(CLASS_NAMES, rotation=30, ha='right')
+        ax.set_ylim(0,1)
+        plt.tight_layout()
         st.pyplot(fig)
 
         st.markdown('</div>', unsafe_allow_html=True)
@@ -148,16 +166,16 @@ if uploaded:
         st.markdown(f"""
         <div class="disease-text">
         <b>AI Prediction:</b> {ai_disease} ({conf:.2f}%)<br><br>
-        <b>Symptom-Based Prediction:</b> {symptom_disease}<br><br>
+        <b>Symptom Prediction:</b> {symptom_disease}<br><br>
         <b>Final Decision:</b> {final_decision}<br><br>
         <b>Selected Symptoms:</b> {", ".join(selected_symptoms) if selected_symptoms else "None"}<br><br>
-        <b>Advice:</b> Consult a medical professional for confirmation.
+        <b>Advice:</b> Please consult a doctor.
         </div>
         """, unsafe_allow_html=True)
 
         st.markdown('</div>', unsafe_allow_html=True)
 
-    # -------- GRADCAM (same stable version) --------
+    # -------- GRADCAM --------
     if st.button("🔥 Show Affected Area"):
         try:
             model = load_grad_model()
@@ -200,24 +218,31 @@ if uploaded:
                 heatmap = cv2.applyColorMap(heatmap, cv2.COLORMAP_JET)
 
                 overlay = cv2.addWeighted(np.array(img_resized),0.6,heatmap,0.4,0)
-                st.image(overlay, caption="🔥 Affected Region", use_container_width=True)
+
+                # MATCH SIZE WITH GRAPH
+                st.image(overlay, caption="🔥 Affected Region", width=400)
 
         except Exception as e:
             st.error(f"GradCAM Error: {e}")
 
-    # -------- HOSPITAL --------
-    st.markdown("## 🏥 Hospitals")
+    # -------- HOSPITALS --------
+    st.markdown("## 🏥 Recommended Hospitals")
+
     city = st.text_input("Enter City")
 
     if city:
         city = city.strip().title()
         if city in HOSPITALS:
-            for h in HOSPITALS[city]:
-                st.markdown(f"""
-                <div class="card">
-                🏥 {h['name']}<br>
-                👨‍⚕️ {h['doc']}<br>
-                ⭐ {rating()}/5<br>
-                <a href="{maps_link(h['name'], city)}">📍 Map</a>
-                </div>
-                """, unsafe_allow_html=True)
+            cols = st.columns(2)
+            for i,h in enumerate(HOSPITALS[city]):
+                with cols[i%2]:
+                    st.markdown(f"""
+                    <div class="card">
+                    <b>🏥 {h['name']}</b><br><br>
+                    👨‍⚕️ {h['doc']}<br><br>
+                    ⭐ {rating()}/5<br><br>
+                    <a href="{maps_link(h['name'], city)}">📍 View Map</a>
+                    </div>
+                    """, unsafe_allow_html=True)
+        else:
+            st.warning("❌ No hospitals found")
